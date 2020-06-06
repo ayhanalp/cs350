@@ -240,6 +240,8 @@ bool
 lock_do_i_hold(struct lock *lock)
 {
         // ~ASST1
+	
+	KASSERT(lock != NULL);
 
         return lock->lk_hldr == curthread;
 }
@@ -248,6 +250,10 @@ lock_do_i_hold(struct lock *lock)
 //
 // CV
 
+
+// Each condition variable is intended to work with a lock:
+// condition variables are only used from within the critical section that is
+// protected by the lock
 
 struct cv *
 cv_create(const char *name)
@@ -265,9 +271,19 @@ cv_create(const char *name)
                 return NULL;
         }
         
-        // add stuff here as needed
+        // ~ASST1
+	
+	cv->cv_wchn = wchan_create(cv->cv_name);
+
+	if (cv->cv_wchn == NULL)
+	{
+		kfree(cv->cv_name);
+		kfree(cv);
+
+		return NULL;
+	}
         
-        return cv;
+       return cv;
 }
 
 void
@@ -275,8 +291,10 @@ cv_destroy(struct cv *cv)
 {
         KASSERT(cv != NULL);
 
-        // add stuff here as needed
-        
+        // ~ASST1
+	
+	wchan_destroy(cv->cv_wchn);
+
         kfree(cv->cv_name);
         kfree(cv);
 }
@@ -284,23 +302,34 @@ cv_destroy(struct cv *cv)
 void
 cv_wait(struct cv *cv, struct lock *lock)
 {
-        // Write this
-        (void)cv;    // suppress warning until code gets written
-        (void)lock;  // suppress warning until code gets written
+        // ~ASST1
+	
+	KASSERT(lock != NULL);
+	KASSERT(cv != NULL);
+	wchan_lock(cv->cv_wchn);
+	lock_release(lock);
+	wchan_sleep(cv->cv_wchn);
+	lock_acquire(lock);
 }
 
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
-        // Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+        // ~ASST1
+	
+	KASSERT(lock != NULL);
+	KASSERT(cv != NULL);
+	KASSERT(lock_do_i_hold(hold));
+	wchan_wakeone(cv->cv_wchn);
 }
 
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
-	// Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	// ~ASST1
+	
+	KASSERT(lock != NULL);
+        KASSERT(cv != NULL);
+        KASSERT(lock_do_i_hold(hold));
+	wchan_wakeall(cv->wchn);
 }
