@@ -217,6 +217,11 @@ lock_acquire(struct lock *lock)
 			spinlock_release(&lock->lk_spnlk);
 			spinlock_acquire(&lock->lk_spnlk);
 		}
+
+		else
+		{
+			break;
+		}
 	}
 
 	lock->lk_hldr = curthread;
