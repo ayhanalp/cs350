@@ -175,7 +175,7 @@ lock_create(const char *name)
 	}
 
 	spinlock_init(&lock->lk_spnlk);
-	lock->hldr = NULL;
+	lock->lk_hldr = NULL;
         return lock;
 }
 
@@ -185,7 +185,7 @@ lock_destroy(struct lock *lock)
         KASSERT(lock != NULL);
 
         // ~ASST1
-	KASSERT(lock->hldr == NULL); // Start by destroying the holder
+	KASSERT(lock->lk_hldr == NULL); // Start by destroying the holder
 	spinlock_cleanup(&lock->lk_spnlk);
 	wchan_destroy(lock->lk_wchn);
         
@@ -215,13 +215,13 @@ lock_acquire(struct lock *lock)
 			wchan_lock(lock->lk_wchn);
 			wchan_sleep(lock->lk_wchn);
 			spinlock_release(&lock->lk_spnlk);
-			spinlock_acquire(&lock->lk_spinlk);
+			spinlock_acquire(&lock->lk_spnlk);
 		}
 	}
 
 	lock->lk_hldr = curthread;
 
-	spinlock_release(&lock->lock_spnlk);
+	spinlock_release(&lock->lk_spnlk);
 }
 
 void
@@ -319,7 +319,7 @@ cv_signal(struct cv *cv, struct lock *lock)
 	
 	KASSERT(lock != NULL);
 	KASSERT(cv != NULL);
-	KASSERT(lock_do_i_hold(hold));
+	KASSERT(lock_do_i_hold(lock));
 	wchan_wakeone(cv->cv_wchn);
 }
 
@@ -330,6 +330,6 @@ cv_broadcast(struct cv *cv, struct lock *lock)
 	
 	KASSERT(lock != NULL);
         KASSERT(cv != NULL);
-        KASSERT(lock_do_i_hold(hold));
-	wchan_wakeall(cv->wchn);
+        KASSERT(lock_do_i_hold(lock));
+	wchan_wakeall(cv->cv_wchn);
 }
