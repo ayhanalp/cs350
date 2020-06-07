@@ -175,6 +175,7 @@ lock_create(const char *name)
 	}
 
 	spinlock_init(&lock->lk_spnlk);
+	lock->lk_volatile = 1;
 	lock->lk_hldr = NULL;
         return lock;
 }
@@ -185,7 +186,8 @@ lock_destroy(struct lock *lock)
         KASSERT(lock != NULL);
 
         // ~ASST1
-	KASSERT(lock->lk_hldr == NULL); // Start by destroying the holder
+
+	KASSERT(lock->lk_hldr == NULL); // it can't be destroyed if it is hold by a holder
 	spinlock_cleanup(&lock->lk_spnlk);
 	wchan_destroy(lock->lk_wchn);
         
@@ -200,21 +202,25 @@ lock_acquire(struct lock *lock)
 	
 	KASSERT(lock != NULL);
 
-        spinlock_acquire(&lock->lk_spnlk);
-	
-	if (lock_do_i_hold(lock) == 1)
+	if (CURCPU_EXISTS())
 	{
-		spinlock_release(&lock->lk_spnlk);
-		return;
+		KASSERT(lock->lk_hldr != curthread);
 	}
+
+	KASSERT(curthread->t_in_interrupt == false);
+
+        spinlock_acquire(&lock->lk_spnlk);
+
 
 	while(1)
 	{
-		if (lock->lk_hldr != NULL)
+		if (lock->lk_volatile == 0)
 		{
 			wchan_lock(lock->lk_wchn);
-			wchan_sleep(lock->lk_wchn);
 			spinlock_release(&lock->lk_spnlk);
+
+			wchan_sleep(lock->lk_wchn);
+			
 			spinlock_acquire(&lock->lk_spnlk);
 		}
 
@@ -224,7 +230,19 @@ lock_acquire(struct lock *lock)
 		}
 	}
 
-	lock->lk_hldr = curthread;
+	KASSERT(lock->lk_volatile > 0);
+
+	lock->lk_volatile = 0;
+
+	if (CURCPU_EXISTS())
+	{
+		lock->lk_hldr = curthread;
+	}
+
+	else
+	{
+		lock->lk_hldr = NULL;
+	}
 
 	spinlock_release(&lock->lk_spnlk);
 }
@@ -235,8 +253,13 @@ lock_release(struct lock *lock)
         // ~ASST1
 
         KASSERT(lock != NULL);
-
+	spinlock_acquire(&lock->lk_spnlk);
+	if (CURCPU_EXISTS())
+	{
+		KASSERT(lock->lk_hldr == curthread);
+	}
 	lock->lk_hldr = NULL;
+	lock->lk_volatile = lock->lk_volatile + 1;
 	wchan_wakeone(lock->lk_wchn);
 	spinlock_release(&lock->lk_spnlk);
 }
