@@ -23,6 +23,71 @@
  */
 static struct semaphore *intersectionSem;
 
+// my variables
+
+#define num_dir 4
+static int car_dist[num_dir][num_dir];
+
+/*
+ * [ [ - - - - ]
+ *   [ - - - - ]
+ *   [ - - - - ]
+ *   [ - - - - ] ]
+ */   
+
+static struct lock *kavsak_lk;
+static struct cv *kavsak_cvs[num_dir][num_dir];
+
+
+
+static bool
+turning_right(Direction org, Direction dest)
+{
+	if ((org == west && dest == south) || (org == south && dest == east) ||
+		(org == east && dest == north) || (org == north && dest == west)) {
+		return true;
+	}
+	return false;
+}
+
+/*
+ * The conditions are the followings to make it possible to enter to kavsak
+ *
+ * V a and V b entered the intersection from the same direction, i.e., V a .origin = V b .origin, or
+ * 
+ * V a and V b are going in opposite directions, i.e., V a .origin = V b .destination and
+ * V a .destination = V b .origin, or
+ *
+ * V a and V b have different destinations, and at least one of them is making a right turn,
+ * e.g., V a is right-turning from north to west, and V b is going from south to north.
+ */
+
+// ASSGN1
+
+static bool
+pssbl2enter(Direction org, Direction dest)
+{
+	for (int i = 0; i < num_dir; i++) {
+		for (int ii = 0; ii < num_dir; ii++) {
+			if (cars_dist[i][ii] > 0) {
+				if (org == i && dest == ii) { // the same dir
+					continue;
+				}
+				else if (org == ii && dest == i) { // the opposite dir
+					continue;
+				}
+				else if (dest != ii && turning_right(org, dest)) {
+					continue;
+				}
+				else {
+					return false;
+				}
+			}
+		}
+	}
+
+	return true;
+}
 
 /* 
  * The simulation driver will call this function once before starting
@@ -31,16 +96,33 @@ static struct semaphore *intersectionSem;
  * You can use it to initialize synchronization and other variables.
  * 
  */
+
 void
 intersection_sync_init(void)
 {
   /* replace this default implementation with your own implementation */
+/*
+ * intersectionSem = sem_create("intersectionSem",1);
+ * if (intersectionSem == NULL) {
+ * panic("could not create intersection semaphore");
+ * }
+ * return;
+ */
+	// ASSGN1
+		
+	kavsak_lk = lock_create();
+	
+	KASSERT(kavsak_lk != NULL);
 
-  intersectionSem = sem_create("intersectionSem",1);
-  if (intersectionSem == NULL) {
-    panic("could not create intersection semaphore");
-  }
-  return;
+	for (int ii = 0; ii < num_dir; i++) {
+		for (int jj = 0; jj < num_dir; jj++) {
+			kavsak_cvs[ii][jj] = cv_create("CVs of KAVSAK");
+
+			KASSERT(kavsak_cvs[ii][jj] != NULL);
+
+			cars_dist[ii][jj] = 0;
+		}
+	}
 }
 
 /* 
@@ -54,8 +136,17 @@ void
 intersection_sync_cleanup(void)
 {
   /* replace this default implementation with your own implementation */
-  KASSERT(intersectionSem != NULL);
-  sem_destroy(intersectionSem);
+/*  KASSERT(intersectionSem != NULL);
+ *  sem_destroy(intersectionSem);
+ */
+	// ASSGN1
+
+	for (int ii = 0; ii < num_dir; ii++) {
+		for (int jj = 0; jj < num_dir; jj++) {
+			cv_destroy(kavsak_cvs[ii][jj]);
+		}
+	}
+
 }
 
 
@@ -76,10 +167,27 @@ void
 intersection_before_entry(Direction origin, Direction destination) 
 {
   /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
-  (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  P(intersectionSem);
+ //   (void)origin;  /* avoid compiler complaint about unused parameter */
+ // (void)destination; /* avoid compiler complaint about unused parameter */
+ // KASSERT(intersectionSem != NULL);
+ // P(intersectionSem);
+ 	// ASSGN1
+
+	lock_acquire(kavsak_lk);
+
+	while (1)
+	{
+		if (pssbl2enter(origin, destination) == 0) {
+			cv_wait(kavsak_cvs[origin][destination], kavsak_lk);
+		}
+		else {
+			break;
+		}
+	}
+
+	cars_dist[origin][destination] = cars_dist[origin][destination] + 1;
+
+	lock_release(kavsak_lk);
 }
 
 
@@ -97,9 +205,23 @@ intersection_before_entry(Direction origin, Direction destination)
 void
 intersection_after_exit(Direction origin, Direction destination) 
 {
-  /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
-  (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  V(intersectionSem);
+ // * replace this default implementation with your own implementation */
+ // (void)origin;  /* avoid compiler complaint about unused parameter */
+ // (void)destination; /* avoid compiler complaint about unused parameter */
+ // KASSERT(intersectionSem != NULL);
+ // V(intersectionSem);
+ 	// ASSGN1
+
+	lock_acquire(kavsak_lk);
+
+	cars_dist[origin][destination] = cars_dist[origin][destination] - 1;
+
+	if (cars_dist[origin][destination] == 0) {
+		for (int ii = 0; ii < num_dir; ii++) {
+			for (int jj = 0; jj < num_dir; jj++) {
+				cv_broadcast(kavsak_cvs[ii][jj], kavsak_lk);
+			}
+		}
+	}
+	lock_release(kavsak_lk);
 }
