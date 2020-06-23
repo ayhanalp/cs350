@@ -21,12 +21,12 @@
 /*
  * replace this with declarations of any synchronization and other variables you need here
  */
-static struct semaphore *intersectionSem;
+// static struct semaphore *intersectionSem;
 
 // my variables
 
 #define num_dir 4
-static int car_dist[num_dir][num_dir];
+static int cars_dist[num_dir][num_dir];
 
 /*
  * [ [ - - - - ]
@@ -67,8 +67,8 @@ turning_right(Direction org, Direction dest)
 static bool
 pssbl2enter(Direction org, Direction dest)
 {
-	for (int i = 0; i < num_dir; i++) {
-		for (int ii = 0; ii < num_dir; ii++) {
+	for (unsigned int i = 0; i < num_dir; i++) {
+		for (unsigned int ii = 0; ii < num_dir; ii++) {
 			if (cars_dist[i][ii] > 0) {
 				if (org == i && dest == ii) { // the same dir
 					continue;
@@ -110,12 +110,12 @@ intersection_sync_init(void)
  */
 	// ASSGN1
 		
-	kavsak_lk = lock_create();
+	kavsak_lk = lock_create("kavsak_lk");
 	
 	KASSERT(kavsak_lk != NULL);
 
-	for (int ii = 0; ii < num_dir; i++) {
-		for (int jj = 0; jj < num_dir; jj++) {
+	for (unsigned int ii = 0; ii < num_dir; ii++) {
+		for (unsigned int jj = 0; jj < num_dir; jj++) {
 			kavsak_cvs[ii][jj] = cv_create("CVs of KAVSAK");
 
 			KASSERT(kavsak_cvs[ii][jj] != NULL);
@@ -141,8 +141,8 @@ intersection_sync_cleanup(void)
  */
 	// ASSGN1
 
-	for (int ii = 0; ii < num_dir; ii++) {
-		for (int jj = 0; jj < num_dir; jj++) {
+	for (unsigned int ii = 0; ii < num_dir; ii++) {
+		for (unsigned int jj = 0; jj < num_dir; jj++) {
 			cv_destroy(kavsak_cvs[ii][jj]);
 		}
 	}
@@ -217,8 +217,8 @@ intersection_after_exit(Direction origin, Direction destination)
 	cars_dist[origin][destination] = cars_dist[origin][destination] - 1;
 
 	if (cars_dist[origin][destination] == 0) {
-		for (int ii = 0; ii < num_dir; ii++) {
-			for (int jj = 0; jj < num_dir; jj++) {
+		for (unsigned int ii = 0; ii < num_dir; ii++) {
+			for (unsigned int jj = 0; jj < num_dir; jj++) {
 				cv_broadcast(kavsak_cvs[ii][jj], kavsak_lk);
 			}
 		}
