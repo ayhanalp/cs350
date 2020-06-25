@@ -190,9 +190,17 @@ syscall(struct trapframe *tf)
 #if OPT_A2
 
 void
-enter_forked_proces(void *trp_frm_copy, unsigned long prc_child)
+enter_forked_prc(void *trp_frm_copy, unsigned long addr_spc_child)
 {
+	struct trapframe trp_frm_child = *(struct trapframe *) trp_frm_copy;
 
+	trp_frm_child.tf_a3 = 0;
+	trp_frm_child.tf_v0 = 0;
+	trp_frm_child.tf_epc = trp_frm_child.tf_epc + 4;
+
+	curproc_setas((struct addrspace *) addr_spc_child);
+	as_activate();
+	mips_usermode(&trp_frm_child);
 }
 
 #else

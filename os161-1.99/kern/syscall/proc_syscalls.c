@@ -150,7 +150,7 @@ sys_fork(struct trapframe *trp_frm, pid_t *return_val)
 
 	prc_child = proc_create_runprogram(curproc->p_name);
 
-	if (NULL == prc_chil)
+	if (NULL == prc_child)
 	{
 		return ENONEM;
 	}
@@ -163,7 +163,7 @@ sys_fork(struct trapframe *trp_frm, pid_t *return_val)
 		return ENOMEN;
 	}
 
-	thread_error = as_copy(curproc_getas(), &as_child);
+	thread_error = as_copy(curproc_getas(), &addr_spc_child);
 	if (thread_error == 1)
 	{
 		proc_destroy(prc_child);
