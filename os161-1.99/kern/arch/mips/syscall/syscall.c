@@ -132,7 +132,17 @@ syscall(struct trapframe *tf)
 #endif // UW
 
 	    /* Add stuff here */
- 
+// Ayhan Alp Aydeniz - aaaydeni
+
+#if OPT_A2
+	
+	case SYS_fork:
+	  err = sys_fork(tf, (pid_t *) &retval);
+	  break;
+
+
+#endif /* Optional for ASSGN2 */
+
 	default:
 	  kprintf("Unknown syscall %d\n", callno);
 	  err = ENOSYS;
@@ -176,8 +186,21 @@ syscall(struct trapframe *tf)
  *
  * Thus, you can trash it and do things another way if you prefer.
  */
+
+#if OPT_A2
+
+void
+enter_forked_proces(void *trp_frm_copy, unsigned long prc_child)
+{
+
+}
+
+#else
+
 void
 enter_forked_process(struct trapframe *tf)
 {
 	(void)tf;
 }
+
+#endif /* Optional for ASSGN2 */

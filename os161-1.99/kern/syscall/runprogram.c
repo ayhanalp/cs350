@@ -44,6 +44,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include <copyinout.h> // Added for ASSGN2
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -51,9 +52,29 @@
  *
  * Calls vfs_open on progname and thus may destroy it.
  */
+
+// Ayhan Alp Aydeniz - aaaydeni
+
+#if OPT_A2
+	int
+        runprogram(char *progname, char **args)	
+
+#else
 int
 runprogram(char *progname)
+
+#endif /* Optional for ASSGN2 */
 {
+
+#if OPT_A2
+
+	size_t args_sz;
+	size_t addr_size;
+
+	vaddr_t *args_usr;
+
+#endif /* Optional for ASSGN2 */
+
 	struct addrspace *as;
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
@@ -97,10 +118,75 @@ runprogram(char *progname)
 		return result;
 	}
 
+#if OPT_A2
+
+	args_sz = 0;
+
+	while (1)
+	{
+		if (NULL != args[args_sz])
+		{
+			args_sz = args_sz + 1;
+		}
+
+		else
+		{
+			break;
+		}
+	}
+
+	args_usr = (vaddr_t *)kmalloc((args_sz+1)*sizeof(vaddr_t));
+
+	for (size_t ii = 0; ii < args_sz; ii++)
+	{
+		addr_size = ROUNDUP (strlen(args[ii])+1, 8);
+
+		stackptr = stackptr - addr_size;
+		
+		// USAGE
+		// int copyoutstr(const char *src, userptr_t userdest, size_t len, size_t *got);
+		result = copyoutstr((const char *) args[ii], (userptr_t) stackptr, addr_size, &addr_size);
+	
+		if (result == 1)
+		{
+			kfree(args_usr);
+			return result;
+		}
+
+		args_usr[ii] = stackptr;
+	}
+
+	args_usr[args_sz] = NULL;
+
+	addr_size = (args_sz+1) * sizeof(vaddr_t);
+
+
+	stackptr = stackptr - ROUNDUP(addr_size, 8);
+
+	// USAGE
+	// int copyout(const void *src, userptr_t userdest, size_t len);
+	
+	result = copyout((const void *) args_usr, (userptr_t) stackptr, addr_size);
+
+	if (result == 1)
+	{
+		kfree (args_usr);
+	}
+
+	/* Warp to user mode. */
+
+	enter_new_process(args_sz, (userptr_t) stackptr, stackptr, entrypoint);
+
+	
+#else
+
+
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
-			  stackptr, entrypoint);
-	
+			stackptr, entrypoint);
+
+#endif /* Optional for ASSGN2 */
+
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;
