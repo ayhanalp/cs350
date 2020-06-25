@@ -50,6 +50,9 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
+#include "opt-A2.h"
+
+// Ayhan Alp Aydeniz - aaaydeni
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -210,6 +213,14 @@ proc_bootstrap(void)
 #endif // UW 
 }
 
+
+#if OPT_A2
+
+pid_assign_kern(kproc);
+
+#endif /* Optional for ASSGN2  */
+
+
 /*
  * Create a fresh proc for use by runprogram.
  *
@@ -270,6 +281,12 @@ proc_create_runprogram(const char *name)
 	proc_count++;
 	V(proc_count_mutex);
 #endif // UW
+
+#if OPT_A2
+
+    pid_assign_next(proc);
+
+#endif /* Optional for ASSGN2 */
 
 	return proc;
 }

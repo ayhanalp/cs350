@@ -45,7 +45,7 @@
 #include <syscall.h>
 #include <test.h>
 #include <copyinout.h> // Added for ASSGN2
-
+#include "opt-A2.h"
 /*
  * Load program "progname" and start running it in usermode.
  * Does not return except on error.

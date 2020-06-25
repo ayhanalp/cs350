@@ -36,8 +36,12 @@
  * Note: curproc is defined by <current.h>.
  */
 
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
+#include "opt-A2.h"
+#include <thread.h>
 
 struct addrspace;
 struct vnode;
@@ -69,6 +73,12 @@ struct proc {
 #endif
 
 	/* add more material here as needed */
+
+#if OPT_A2
+
+    pid_t p_pid;
+
+#endif /* Optional for ASSGN2 */
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */

@@ -35,7 +35,7 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
-
+#include "opt-A2.h"
 
 /*
  * System call dispatcher.
@@ -75,6 +75,9 @@
  * stack, starting at sp+16 to skip over the slots for the
  * registerized values, with copyin().
  */
+
+// Ayhan Alp Aydeniz - aaaydeni
+
 void
 syscall(struct trapframe *tf)
 {

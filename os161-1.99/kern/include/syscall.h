@@ -30,6 +30,9 @@
 #ifndef _SYSCALL_H_
 #define _SYSCALL_H_
 
+#include "opt-A2.h"
+
+/* Ayhan Alp Aydeniz - aaaydeni */
 
 struct trapframe; /* from <machine/trapframe.h> */
 
@@ -44,7 +47,15 @@ void syscall(struct trapframe *tf);
  */
 
 /* Helper for fork(). You write this. */
+
+#if OPT_A2
+void enter_forked_prc(void *trp_frm_copy, unsigned long addr_spc_child);
+
+
+#else
 void enter_forked_process(struct trapframe *tf);
+
+#endif /* Optional for ASSGN2 */
 
 /* Enter user mode. Does not return. */
 void enter_new_process(int argc, userptr_t argv, vaddr_t stackptr,
@@ -65,5 +76,11 @@ int sys_getpid(pid_t *retval);
 int sys_waitpid(pid_t pid, userptr_t status, int options, pid_t *retval);
 
 #endif // UW
+
+#if OPT_A2
+
+int sys_fork(struct trapframe *trp_frm, pid_t *return_val);
+
+#endif /* Optional for ASSGN2 */
 
 #endif /* _SYSCALL_H_ */
