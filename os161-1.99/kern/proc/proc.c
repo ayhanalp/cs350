@@ -51,6 +51,8 @@
 #include <synch.h>
 #include <kern/fcntl.h>  
 #include "opt-A2.h"
+#include <pid.h>
+#include "pid.c"
 
 // Ayhan Alp Aydeniz - aaaydeni
 
