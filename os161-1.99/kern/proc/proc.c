@@ -42,6 +42,8 @@
  * process that will have more than one thread is the kernel process.
  */
 
+#include "opt-A2.h"
+
 #include <types.h>
 #include <proc.h>
 #include <current.h>
@@ -50,9 +52,8 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
-#include "opt-A2.h"
+
 #include <pid.h>
-#include "pid.c"
 
 // Ayhan Alp Aydeniz - aaaydeni
 
@@ -218,7 +219,7 @@ proc_bootstrap(void)
 
 #if OPT_A2
 
-pid_assign_kern(kproc);
+// pid_assign_kern(kproc);
 
 #endif /* Optional for ASSGN2  */
 

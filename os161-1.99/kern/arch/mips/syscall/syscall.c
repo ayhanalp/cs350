@@ -36,6 +36,8 @@
 #include <current.h>
 #include <syscall.h>
 #include "opt-A2.h"
+#include <proc.h>
+#include <addrspace.h>
 
 /*
  * System call dispatcher.

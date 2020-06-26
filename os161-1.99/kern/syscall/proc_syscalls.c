@@ -1,3 +1,4 @@
+#include "opt-A2.h"
 #include <types.h>
 #include <kern/errno.h>
 #include <kern/unistd.h>
@@ -10,16 +11,10 @@
 #include <addrspace.h>
 #include <copyinout.h>
 #include <kern/fcntl.h>
-#include <test.h>
-#include <vm.h>
-#include "autoconf.h"
-#include "opt-A2.h"
-#include <synch.h>
-#include <limits.h>//PATH_MAX
+
 #include <vfs.h>
 #include <mips/trapframe.h>
 #include <pid.h>
-#include "opt-A2.h"
 
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
@@ -38,13 +33,11 @@ void sys__exit(int exitcode) {
   
   // see the functions in ASSGN1
 
-  cv_broadcast (p->p_waitcv, p->waitlk);
-  lock_acquire (p->p_exit_lk);
-  lock_release (p->p_exit_l);
 #else
   /* for now, just include this to keep the compiler from complaining about
      an unused variable */
   (void)exitcode;
+
 #endif /* Optional for ASSGN2 */
 
   DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitcode);
@@ -130,6 +123,7 @@ sys_waitpid(pid_t pid,
   /* for now, just pretend the exitstatus is 0 */
   exitstatus = 0;
 #endif /* Optional for ASSGN */
+
   result = copyout((void *)&exitstatus,status,sizeof(int));
   if (result) {
     return(result);
@@ -152,20 +146,23 @@ sys_fork(struct trapframe *trp_frm, pid_t *return_val)
 
 	if (NULL == prc_child)
 	{
-		return ENONEM;
+		return ENOMEM;
 	}
 	
 	trp_frm_copy = kmalloc(sizeof (struct trapframe));
 	if (NULL == trp_frm_copy)
 	{
-		proc_destroy(prc_child);
+		pid_fail();
 		
-		return ENOMEN;
+		proc_destroy(prc_child);
+			
+		return ENOMEM;
 	}
 
 	thread_error = as_copy(curproc_getas(), &addr_spc_child);
 	if (thread_error == 1)
 	{
+		as_destroy(addr_spc_child);
 		proc_destroy(prc_child);
 		pid_fail();
 
@@ -181,14 +178,14 @@ sys_fork(struct trapframe *trp_frm, pid_t *return_val)
 	{
 		as_destroy(addr_spc_child);
 	
+		pid_fail();
+
 		kfree (trp_frm_copy);
 
 		proc_destroy(prc_child);
 
 		return thread_error;
 	}
-
-	lock_acquire(prc_child->p_exit_lk);
 
 	*return_val = prc_child->p_pid;
 
