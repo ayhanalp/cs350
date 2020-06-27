@@ -44,8 +44,8 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
-#include <copyinout.h> // Added for ASSGN2
-#include "opt-A2.h"
+#include <copyinout.h>
+#include <limits.h>
 /*
  * Load program "progname" and start running it in usermode.
  * Does not return except on error.
@@ -55,12 +55,23 @@
 
 // Ayhan Alp Aydeniz - aaaydeni
 
+
+/* This file also includes modifications for A2b */
+
+int bs_req_for(int count, size_t typesize) {
+	size_t addrsize = sizeof(userptr_t);
+	int bytes = (typesize * count);
+	bytes += bytes % addrsize == 0 ? 0 : addrsize - (bytes % addrsize);
+	return bytes;
+}
+
+
 int
-runprogram(char *progname)
-{
+runprogram(char *progname, char **args, unsigned long argc)
+{   
 	struct addrspace *as;
 	struct vnode *v;
-	vaddr_t entrypoint, stackptr;
+	vaddr_t entrypoint, stackptr; // these are just integers
 	int result;
 
 	/* Open the file. */
@@ -70,17 +81,25 @@ runprogram(char *progname)
 	}
 
 	/* We should be a new process. */
-	KASSERT(curproc_getas() == NULL);
+	// KASSERT(curproc_getas() == NULL);
 
 	/* Create a new address space. */
 	as = as_create();
-	if (as ==NULL) {
+	if (as == NULL) {
 		vfs_close(v);
 		return ENOMEM;
 	}
 
-	/* Switch to it and activate it. */
-	curproc_setas(as);
+	/* Deactiveate the current address space, if exists */
+	if (curproc_getas() != NULL) {
+		as_deactivate();
+	}
+
+	/* Switch to it and activate it (clean up old one). */
+	struct addrspace * oldas = curproc_setas(as);
+	if (oldas != NULL) {
+		as_destroy(oldas);
+	}
 	as_activate();
 
 	/* Load the executable. */
@@ -101,13 +120,68 @@ runprogram(char *progname)
 		return result;
 	}
 
+	// newargs, in case args isn't defined
+	char *newargs[1];
+	newargs[0] = NULL;
+	if (args == NULL) {
+		args = newargs;
+	}
+
+	// calculate total combined length of arguments, including \0 terminators
+	int totalargslen = 0;
+
+	for (unsigned long i = 0; i < argc; i++) {
+		int arglen = strlen(args[i]);
+		totalargslen += arglen + 1; // +1 for \0
+	}
+
+	if (totalargslen > ARG_MAX) {
+		return E2BIG;
+	}
+
+
+	// Bytes required for argv, accounting for alignment
+	int argvmem = bs_req_for(argc + 1, sizeof(char **));
+	int argvvalmem = bs_req_for(totalargslen, sizeof(char));
+
+	// Total memory required for all arguments
+	int totalmem = argvmem + argvvalmem;
+
+	// Allocate memory on the stack for the new params
+	stackptr -= totalmem;
+
+	// Address of argument values on the user stack
+	char *argv[argc + 1]; // + 1 for NULL at the end
+	userptr_t uargv = (userptr_t)stackptr;
+	userptr_t uargvval = (userptr_t)(stackptr + argvmem);
+
+	size_t got;
+	int argvvaloffset = 0;
+
+	for (unsigned long j = 0; j < argc; j++) {
+		char * arg = args[j];
+		userptr_t dest = (userptr_t)((char *)uargvval + argvvaloffset);
+		result = copyoutstr(arg, dest, strlen(arg) + 1, &got);
+		if (result) {
+			// Address space copy error
+			return result;
+		}
+		argv[j] = (char *)dest;
+		argvvaloffset += got;
+	}
+
+	argv[argc] = NULL;
+	result = copyout(argv, uargv, (argc + 1) * sizeof(char *));
+	if (result) {
+		// Address space copy error
+		return result;
+	}
+
 
 	/* Warp to user mode. */
-	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
-			stackptr, entrypoint);
+	enter_new_process(argc, uargv, stackptr, entrypoint);
 
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;
 }
-

@@ -30,18 +30,20 @@
 #ifndef _PROC_H_
 #define _PROC_H_
 
+// Ayhan Alp Aydeniz
+
 /*
  * Definition of a process.
  *
  * Note: curproc is defined by <current.h>.
  */
 
-/* Ayhan Alp Aydeniz - aaaydeni */
+#include <array.h>
+#include <types.h>
 
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
 #include "opt-A2.h"
-#include <thread.h>
 
 struct addrspace;
 struct vnode;
@@ -53,8 +55,20 @@ struct semaphore;
  * Process structure.
  */
 struct proc {
-	char *p_name;			/* Name of this process */
-	struct spinlock p_lock;		/* Lock for this structure */
+  	char *p_name;
+
+#if OPT_A2
+  	pid_t p_proc_id;
+  	struct array p_arr_child;
+  	struct cv *p_cv_wait;
+  	struct lock *p_lk_wait;
+  	struct lock *p_lk_exit;
+  	bool p_iSexit;
+  	int p_exitcode;
+  
+#endif /* Optional for ASSGN2 */
+	
+  	struct spinlock p_lock;		/* Lock for this structure */
 	struct threadarray p_threads;	/* Threads in this process */
 
 	/* VM */
@@ -73,12 +87,6 @@ struct proc {
 #endif
 
 	/* add more material here as needed */
-
-#if OPT_A2
-
-    pid_t p_pid;
-
-#endif /* Optional for ASSGN2 */
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */
@@ -110,5 +118,16 @@ struct addrspace *curproc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *curproc_setas(struct addrspace *);
 
+pid_t get_proc_id(void);
+
+void add_prc(struct array *procs, struct proc*p);
+void remove_prc(struct array *procs, pid_t proc_id);
+void remove_prc_v1(pid_t proc_id);
+void add_prc_v1(struct proc *p);
+
+
+unsigned find_proc_id(struct array *procs, pid_t proc_id);
+struct proc * proc_id_w_proc(struct array *procs, pid_t proc_id);
+struct proc* find_proc_w_proc_id(pid_t proc_id);
 
 #endif /* _PROC_H_ */

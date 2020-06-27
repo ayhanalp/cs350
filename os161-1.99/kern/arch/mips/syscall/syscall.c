@@ -37,7 +37,7 @@
 #include <syscall.h>
 #include "opt-A2.h"
 #include <proc.h>
-#include <addrspace.h>
+
 
 /*
  * System call dispatcher.
@@ -78,8 +78,8 @@
  * registerized values, with copyin().
  */
 
-// Ayhan Alp Aydeniz - aaaydeni
-
+// Ayhan Alp Aydeniz - aaaydeni	
+	
 void
 syscall(struct trapframe *tf)
 {
@@ -113,7 +113,18 @@ syscall(struct trapframe *tf)
 		err = sys___time((userptr_t)tf->tf_a0,
 				 (userptr_t)tf->tf_a1);
 		break;
+
+
+#if OPT_A2
+	case SYS_fork:
+	  err = sys_fork((pid_t *)&retval,tf);
+	  break;	
+#endif /* Optional for ASSGN2 */
+
 #ifdef UW
+		//	case SYS_fork:
+		//err = sys_fork((pid_t *)&retval,tf);
+
 	case SYS_write:
 	  err = sys_write((int)tf->tf_a0,
 			  (userptr_t)tf->tf_a1,
@@ -128,6 +139,9 @@ syscall(struct trapframe *tf)
 	case SYS_getpid:
 	  err = sys_getpid((pid_t *)&retval);
 	  break;
+#endif
+
+#if OPT_A2
 	case SYS_waitpid:
 	  err = sys_waitpid((pid_t)tf->tf_a0,
 			    (userptr_t)tf->tf_a1,
@@ -135,19 +149,8 @@ syscall(struct trapframe *tf)
 			    (pid_t *)&retval);
 	  break;
 #endif // UW
-
 	    /* Add stuff here */
-// Ayhan Alp Aydeniz - aaaydeni
-
-#if OPT_A2
-	
-	case SYS_fork:
-	  err = sys_fork(tf, (pid_t *) &retval);
-	  break;
-
-
-#endif /* Optional for ASSGN2 */
-
+ 
 	default:
 	  kprintf("Unknown syscall %d\n", callno);
 	  err = ENOSYS;
@@ -191,29 +194,29 @@ syscall(struct trapframe *tf)
  *
  * Thus, you can trash it and do things another way if you prefer.
  */
-
-#if OPT_A2
-
 void
-enter_forked_prc(void *trp_frm_copy, unsigned long addr_spc_child)
+enter_forked_process(void *data1, unsigned long data2)
 {
-	struct trapframe trp_frm_child = *(struct trapframe *) trp_frm_copy;
+  struct trapframe *otf = data1;
+  struct trapframe tf = *otf;
 
-	trp_frm_child.tf_a3 = 0;
-	trp_frm_child.tf_v0 = 0;
-	trp_frm_child.tf_epc = trp_frm_child.tf_epc + 4;
+  (void) data2;
+  
+  tf.tf_v0 = 0;
+  tf.tf_a3 = 0;
 
-	curproc_setas((struct addrspace *) addr_spc_child);
-	as_activate();
-	mips_usermode(&trp_frm_child);
+  tf.tf_epc += 4;
+
+  kfree(otf);
+  KASSERT(curthread->t_curspl == 0);
+  KASSERT(curthread->t_iplhigh_count == 0);
+
+  mips_usermode(&tf);
+/*
+ * void
+ * enter_forked_process(struct trapframe *tf)
+ * {
+ *	(void)tf;
+ * }
+ * */
 }
-
-#else
-
-void
-enter_forked_process(struct trapframe *tf)
-{
-	(void)tf;
-}
-
-#endif /* Optional for ASSGN2 */

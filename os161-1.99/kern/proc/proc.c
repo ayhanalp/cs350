@@ -42,8 +42,6 @@
  * process that will have more than one thread is the kernel process.
  */
 
-#include "opt-A2.h"
-
 #include <types.h>
 #include <proc.h>
 #include <current.h>
@@ -52,8 +50,7 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
-
-#include <pid.h>
+#include "opt-A2.h"
 
 // Ayhan Alp Aydeniz - aaaydeni
 
@@ -76,6 +73,79 @@ struct semaphore *no_proc_sem;
 #endif  // UW
 
 
+#if OPT_A2
+
+struct array *overall;
+
+pid_t curr_proc_id = 0; // that must be initialized by "1"
+
+
+pid_t get_proc_id()
+{ 
+	return curr_proc_id = curr_proc_id + 1;
+}
+
+unsigned find_proc_id(struct array *procs, pid_t proc_id) {
+
+  for(unsigned ii = 0; ii < array_num(procs); ii++)
+  {
+    struct proc * p = array_get(procs, ii);
+   
+    if(proc_id == p->p_proc_id)
+    {
+	    return ii;
+    }
+  }
+
+  return -1;
+}
+
+
+struct proc * proc_id_w_proc(struct array *procs, pid_t proc_id)
+{
+	return array_get(procs, find_proc_id(procs, proc_id));
+}
+
+struct proc * find_proc_w_proc_id(pid_t proc_id)
+{
+      	return proc_id_w_proc(overall, proc_id);
+}
+
+void add_prc(struct array *procs, struct proc *proc)
+{
+	array_add(procs, proc, NULL);
+}
+
+void add_prc_v1(struct proc *proc)
+{
+	if (NULL == overall)
+	{
+		overall = array_create();
+    		array_init(overall);
+  	}
+  	
+	add_prc(overall, proc);
+}
+
+void remove_prc(struct array *procs, pid_t proc_id)
+{
+	array_remove(procs, find_proc_id(procs, proc_id));
+}
+
+void remove_prc_v1(pid_t proc_id)
+{
+	remove_prc(overall, proc_id);
+
+	if (array_num(overall) == 0) {
+		// See C funcs
+		array_cleanup(overall);
+		array_destroy(overall);
+    		overall = NULL;
+  	}
+}
+
+#endif
+
 
 /*
  * Create a proc structure.
@@ -84,33 +154,73 @@ static
 struct proc *
 proc_create(const char *name)
 {
-	struct proc *proc;
+        struct proc *proc;
 
-	proc = kmalloc(sizeof(*proc));
-	if (proc == NULL) {
-		return NULL;
-	}
+        proc = kmalloc(sizeof(*proc));
+        
+	if (proc == NULL)
+	{
+                return NULL;
+        }
+        
 	proc->p_name = kstrdup(name);
-	if (proc->p_name == NULL) {
-		kfree(proc);
-		return NULL;
-	}
+        
+	if (proc->p_name == NULL)
+	{
+                kfree(proc);
+                return NULL;
+        }
 
-	threadarray_init(&proc->p_threads);
+        threadarray_init(&proc->p_threads);
+        
 	spinlock_init(&proc->p_lock);
 
-	/* VM fields */
-	proc->p_addrspace = NULL;
+        proc->p_addrspace = NULL;
 
-	/* VFS fields */
-	proc->p_cwd = NULL;
+        
+        proc->p_cwd = NULL;
 
 #ifdef UW
-	proc->console = NULL;
+        proc->console = NULL;
 #endif // UW
 
-	return proc;
+#if OPT_A2
+
+        proc->p_exitcode = 0;
+	proc->p_proc_id = get_proc_id();
+        proc->p_iSexit = false;
+        
+        proc->p_lk_wait = lock_create("waitlk");
+        
+	if (NULL == proc->p_lk_wait)
+	{
+        	panic("proc_create could not create wait lock");
+        }
+        
+	proc->p_lk_exit = lock_create("p_lk_exit");
+        
+	if(NULL == proc->p_lk_exit)
+	{
+        	panic("proc_create could not create exit lock");
+        }
+        
+	proc->p_cv_wait = cv_create("waitcv");
+        
+	if(NULL == proc->p_cv_wait)
+	{
+          panic("proc_create could not create wait cv");
+        
+	}
+        
+	proc->p_arr_child = *array_create();
+        array_init(&proc->p_arr_child);
+        add_prc_v1(proc);
+
+#endif /* Optional for ASSGN2 */
+
+        return proc;
 }
+
 
 /*
  * Destroy a proc structure.
@@ -127,9 +237,11 @@ proc_destroy(struct proc *proc)
          * from the process.
 	 */
 
-	KASSERT(proc != NULL);
 	KASSERT(proc != kproc);
+	KASSERT(NULL != proc);
 
+
+	remove_prc_v1(proc->p_proc_id);
 	/*
 	 * We don't take p_lock in here because we must have the only
 	 * reference to this structure. (Otherwise it would be
@@ -172,8 +284,18 @@ proc_destroy(struct proc *proc)
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 
+#if OPT_A2
 	kfree(proc->p_name);
-	kfree(proc);
+        kfree(proc);
+
+	array_cleanup(&proc->p_arr_child);
+	
+	lock_destroy(proc->p_lk_wait);
+	lock_destroy(proc->p_lk_exit);
+	
+	cv_destroy(proc->p_cv_wait);
+
+#endif /* Optional for ASSGN2 */
 
 #ifdef UW
 	/* decrement the process count */
@@ -190,8 +312,8 @@ proc_destroy(struct proc *proc)
 	V(proc_count_mutex);
 #endif // UW
 	
-
 }
+
 
 /*
  * Create the process structure for the kernel.
@@ -213,16 +335,8 @@ proc_bootstrap(void)
   if (no_proc_sem == NULL) {
     panic("could not create no_proc_sem semaphore\n");
   }
-#endif // UW 
+#endif // UW
 }
-
-
-#if OPT_A2
-
-// pid_assign_kern(kproc);
-
-#endif /* Optional for ASSGN2  */
-
 
 /*
  * Create a fresh proc for use by runprogram.
@@ -285,12 +399,6 @@ proc_create_runprogram(const char *name)
 	V(proc_count_mutex);
 #endif // UW
 
-#if OPT_A2
-
-    pid_assign_next(proc);
-
-#endif /* Optional for ASSGN2 */
-
 	return proc;
 }
 
@@ -301,19 +409,20 @@ proc_create_runprogram(const char *name)
 int
 proc_addthread(struct proc *proc, struct thread *t)
 {
-	int result;
+        int result;
 
-	KASSERT(t->t_proc == NULL);
+        KASSERT(t->t_proc == NULL);
 
-	spinlock_acquire(&proc->p_lock);
-	result = threadarray_add(&proc->p_threads, t, NULL);
-	spinlock_release(&proc->p_lock);
-	if (result) {
-		return result;
-	}
-	t->t_proc = proc;
-	return 0;
+        spinlock_acquire(&proc->p_lock);
+        result = threadarray_add(&proc->p_threads, t, NULL);
+        spinlock_release(&proc->p_lock);
+        if (result) {
+                return result;
+        }
+        t->t_proc = proc;
+        return 0;
 }
+
 
 /*
  * Remove a thread from its process. Either the thread or the process
@@ -322,27 +431,28 @@ proc_addthread(struct proc *proc, struct thread *t)
 void
 proc_remthread(struct thread *t)
 {
-	struct proc *proc;
-	unsigned i, num;
+        struct proc *proc;
+        unsigned i, num;
 
-	proc = t->t_proc;
-	KASSERT(proc != NULL);
+        proc = t->t_proc;
+        KASSERT(proc != NULL);
 
-	spinlock_acquire(&proc->p_lock);
-	/* ugh: find the thread in the array */
-	num = threadarray_num(&proc->p_threads);
-	for (i=0; i<num; i++) {
-		if (threadarray_get(&proc->p_threads, i) == t) {
-			threadarray_remove(&proc->p_threads, i);
-			spinlock_release(&proc->p_lock);
-			t->t_proc = NULL;
-			return;
-		}
-	}
-	/* Did not find it. */
-	spinlock_release(&proc->p_lock);
-	panic("Thread (%p) has escaped from its process (%p)\n", t, proc);
+        spinlock_acquire(&proc->p_lock);
+        /* ugh: find the thread in the array */
+        num = threadarray_num(&proc->p_threads);
+        for (i=0; i<num; i++) {
+                if (threadarray_get(&proc->p_threads, i) == t) {
+                        threadarray_remove(&proc->p_threads, i);
+                        spinlock_release(&proc->p_lock);
+                        t->t_proc = NULL;
+                        return;
+                }
+        }
+        /* Did not find it. */
+        spinlock_release(&proc->p_lock);
+        panic("Thread (%p) has escaped from its process (%p)\n", t, proc);
 }
+
 
 /*
  * Fetch the address space of the current process. Caution: it isn't
@@ -352,20 +462,20 @@ proc_remthread(struct thread *t)
 struct addrspace *
 curproc_getas(void)
 {
-	struct addrspace *as;
+        struct addrspace *as;
 #ifdef UW
-        /* Until user processes are created, threads used in testing 
+        /* Until user processes are created, threads used in testing
          * (i.e., kernel threads) have no process or address space.
          */
-	if (curproc == NULL) {
-		return NULL;
-	}
+        if (curproc == NULL) {
+                return NULL;
+        }
 #endif
 
-	spinlock_acquire(&curproc->p_lock);
-	as = curproc->p_addrspace;
-	spinlock_release(&curproc->p_lock);
-	return as;
+        spinlock_acquire(&curproc->p_lock);
+        as = curproc->p_addrspace;
+        spinlock_release(&curproc->p_lock);
+        return as;
 }
 
 /*
@@ -375,12 +485,13 @@ curproc_getas(void)
 struct addrspace *
 curproc_setas(struct addrspace *newas)
 {
-	struct addrspace *oldas;
-	struct proc *proc = curproc;
+        struct addrspace *oldas;
+        struct proc *proc = curproc;
 
-	spinlock_acquire(&proc->p_lock);
-	oldas = proc->p_addrspace;
-	proc->p_addrspace = newas;
-	spinlock_release(&proc->p_lock);
-	return oldas;
+        spinlock_acquire(&proc->p_lock);
+        oldas = proc->p_addrspace;
+        proc->p_addrspace = newas;
+        spinlock_release(&proc->p_lock);
+        return oldas;
 }
+

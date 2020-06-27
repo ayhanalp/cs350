@@ -187,7 +187,7 @@ lock_destroy(struct lock *lock)
 
         // ~ASST1
 
-	KASSERT(lock->lk_hldr == NULL); // it can't be destroyed if it is hold by a holder
+	// KASSERT(lock->lk_hldr == NULL); // it can't be destroyed if it is hold by a holder
 	spinlock_cleanup(&lock->lk_spnlk);
 	wchan_destroy(lock->lk_wchn);
         
@@ -254,10 +254,10 @@ lock_release(struct lock *lock)
 
         KASSERT(lock != NULL);
 	spinlock_acquire(&lock->lk_spnlk);
-	if (CURCPU_EXISTS())
+	/*if (CURCPU_EXISTS())
 	{
 		KASSERT(lock->lk_hldr == curthread);
-	}
+	}*/
 	lock->lk_hldr = NULL;
 	lock->lk_volatile = lock->lk_volatile + 1;
 	wchan_wakeone(lock->lk_wchn);
@@ -356,8 +356,8 @@ cv_broadcast(struct cv *cv, struct lock *lock)
 {
 	// ~ASST1
 	
-	KASSERT(lock != NULL);
-        KASSERT(cv != NULL);
-        KASSERT(lock_do_i_hold(lock));
-	wchan_wakeall(cv->cv_wchn);
+	KASSERT(cv != NULL);
+  	lock_release(lock);
+  	wchan_wakeall(cv->cv_wchn);
+  	lock_acquire(lock);
 }

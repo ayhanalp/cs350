@@ -279,24 +279,24 @@ uio.o: ../../lib/uio.c ../../include/types.h ../../include/kern/types.h \
   includelinks/kern/machine/types.h includelinks/machine/types.h \
   ../../include/lib.h ../../include/cdefs.h opt-noasserts.h \
   ../../include/uio.h ../../include/kern/iovec.h ../../include/proc.h \
-  ../../include/spinlock.h includelinks/machine/spinlock.h \
-  ../../include/thread.h ../../include/array.h ../../include/threadlist.h \
-  includelinks/machine/thread.h ../../include/setjmp.h \
-  includelinks/kern/machine/setjmp.h opt-A2.h ../../include/current.h \
-  includelinks/machine/current.h ../../include/copyinout.h
-proc.o: ../../proc/proc.c opt-A2.h ../../include/types.h \
-  ../../include/kern/types.h includelinks/kern/machine/types.h \
-  includelinks/machine/types.h ../../include/proc.h \
-  ../../include/spinlock.h ../../include/cdefs.h \
+  ../../include/array.h ../../include/spinlock.h \
   includelinks/machine/spinlock.h ../../include/thread.h \
-  ../../include/array.h ../../include/lib.h opt-noasserts.h \
   ../../include/threadlist.h includelinks/machine/thread.h \
   ../../include/setjmp.h includelinks/kern/machine/setjmp.h opt-A2.h \
   ../../include/current.h includelinks/machine/current.h \
-  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
-  ../../include/vnode.h ../../include/vfs.h ../../include/synch.h \
-  ../../include/kern/fcntl.h ../../include/pid.h ../../include/limits.h \
-  ../../include/kern/limits.h
+  ../../include/copyinout.h
+proc.o: ../../proc/proc.c ../../include/types.h \
+  ../../include/kern/types.h includelinks/kern/machine/types.h \
+  includelinks/machine/types.h ../../include/proc.h ../../include/array.h \
+  ../../include/lib.h ../../include/cdefs.h opt-noasserts.h \
+  ../../include/spinlock.h includelinks/machine/spinlock.h \
+  ../../include/thread.h ../../include/threadlist.h \
+  includelinks/machine/thread.h ../../include/setjmp.h \
+  includelinks/kern/machine/setjmp.h opt-A2.h ../../include/current.h \
+  includelinks/machine/current.h ../../include/addrspace.h \
+  ../../include/vm.h includelinks/machine/vm.h ../../include/vnode.h \
+  ../../include/vfs.h ../../include/synch.h ../../include/kern/fcntl.h \
+  opt-A2.h
 main.o: ../../startup/main.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/kern/errno.h \
@@ -332,66 +332,65 @@ file_syscalls.o: ../../syscall/file_syscalls.c ../../include/types.h \
   includelinks/machine/types.h ../../include/kern/errno.h \
   ../../include/kern/unistd.h ../../include/lib.h ../../include/cdefs.h \
   opt-noasserts.h ../../include/uio.h ../../include/kern/iovec.h \
-  ../../include/syscall.h opt-A2.h ../../include/vnode.h \
-  ../../include/vfs.h ../../include/array.h ../../include/current.h \
+  ../../include/syscall.h ../../include/vnode.h ../../include/vfs.h \
+  ../../include/array.h ../../include/current.h \
   includelinks/machine/current.h ../../include/thread.h \
   ../../include/spinlock.h includelinks/machine/spinlock.h \
   ../../include/threadlist.h includelinks/machine/thread.h \
   ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
-  ../../include/proc.h
+  ../../include/proc.h opt-A2.h
 loadelf.o: ../../syscall/loadelf.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/kern/errno.h \
   ../../include/lib.h ../../include/cdefs.h opt-noasserts.h \
   ../../include/uio.h ../../include/kern/iovec.h ../../include/proc.h \
-  ../../include/spinlock.h includelinks/machine/spinlock.h \
-  ../../include/thread.h ../../include/array.h ../../include/threadlist.h \
-  includelinks/machine/thread.h ../../include/setjmp.h \
-  includelinks/kern/machine/setjmp.h opt-A2.h ../../include/current.h \
-  includelinks/machine/current.h ../../include/addrspace.h \
-  ../../include/vm.h includelinks/machine/vm.h ../../include/vnode.h \
-  ../../include/elf.h includelinks/machine/elf.h
-proc_syscalls.o: ../../syscall/proc_syscalls.c opt-A2.h \
-  ../../include/types.h ../../include/kern/types.h \
-  includelinks/kern/machine/types.h includelinks/machine/types.h \
-  ../../include/kern/errno.h ../../include/kern/unistd.h \
-  ../../include/kern/wait.h ../../include/lib.h ../../include/cdefs.h \
-  opt-noasserts.h ../../include/syscall.h opt-A2.h \
+  ../../include/array.h ../../include/spinlock.h \
+  includelinks/machine/spinlock.h ../../include/thread.h \
+  ../../include/threadlist.h includelinks/machine/thread.h \
+  ../../include/setjmp.h includelinks/kern/machine/setjmp.h opt-A2.h \
   ../../include/current.h includelinks/machine/current.h \
-  ../../include/thread.h ../../include/array.h ../../include/spinlock.h \
+  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
+  ../../include/vnode.h ../../include/elf.h includelinks/machine/elf.h
+proc_syscalls.o: ../../syscall/proc_syscalls.c ../../include/types.h \
+  ../../include/kern/types.h includelinks/kern/machine/types.h \
+  includelinks/machine/types.h ../../include/kern/errno.h \
+  ../../include/kern/unistd.h includelinks/mips/trapframe.h \
+  ../../include/kern/wait.h ../../include/lib.h ../../include/cdefs.h \
+  opt-noasserts.h ../../include/syscall.h ../../include/current.h \
+  includelinks/machine/current.h ../../include/thread.h \
+  ../../include/array.h ../../include/spinlock.h \
   includelinks/machine/spinlock.h ../../include/threadlist.h \
   includelinks/machine/thread.h ../../include/setjmp.h \
-  includelinks/kern/machine/setjmp.h ../../include/proc.h \
+  includelinks/kern/machine/setjmp.h ../../include/proc.h opt-A2.h \
   ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
-  ../../include/copyinout.h ../../include/kern/fcntl.h \
-  ../../include/vfs.h includelinks/mips/trapframe.h ../../include/pid.h \
-  ../../include/limits.h ../../include/kern/limits.h \
-  ../../include/synch.h
+  ../../include/copyinout.h opt-A2.h ../../include/synch.h \
+  ../../include/limits.h ../../include/kern/limits.h ../../include/vfs.h \
+  ../../include/kern/fcntl.h ../../include/test.h autoconf.h
 runprogram.o: ../../syscall/runprogram.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/kern/errno.h \
   ../../include/kern/fcntl.h ../../include/lib.h ../../include/cdefs.h \
-  opt-noasserts.h ../../include/proc.h ../../include/spinlock.h \
-  includelinks/machine/spinlock.h ../../include/thread.h \
-  ../../include/array.h ../../include/threadlist.h \
+  opt-noasserts.h ../../include/proc.h ../../include/array.h \
+  ../../include/spinlock.h includelinks/machine/spinlock.h \
+  ../../include/thread.h ../../include/threadlist.h \
   includelinks/machine/thread.h ../../include/setjmp.h \
   includelinks/kern/machine/setjmp.h opt-A2.h ../../include/current.h \
   includelinks/machine/current.h ../../include/addrspace.h \
   ../../include/vm.h includelinks/machine/vm.h ../../include/vfs.h \
   ../../include/syscall.h ../../include/test.h ../../include/copyinout.h \
-  opt-A2.h
+  ../../include/limits.h ../../include/kern/limits.h
 time_syscalls.o: ../../syscall/time_syscalls.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/clock.h opt-synchprobs.h \
-  ../../include/copyinout.h ../../include/syscall.h opt-A2.h
+  ../../include/copyinout.h ../../include/syscall.h
 arraytest.o: ../../test/arraytest.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \
-  opt-noasserts.h ../../include/array.h ../../include/test.h
+  opt-noasserts.h ../../include/array.h ../../include/test.h opt-A2.h
 bitmaptest.o: ../../test/bitmaptest.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \
-  opt-noasserts.h ../../include/bitmap.h ../../include/test.h
+  opt-noasserts.h ../../include/bitmap.h ../../include/test.h opt-A2.h
 fstest.o: ../../test/fstest.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/kern/errno.h \
@@ -402,7 +401,7 @@ fstest.o: ../../test/fstest.c ../../include/types.h \
   includelinks/machine/thread.h ../../include/setjmp.h \
   includelinks/kern/machine/setjmp.h ../../include/synch.h \
   ../../include/vfs.h ../../include/fs.h ../../include/vnode.h \
-  ../../include/test.h
+  ../../include/test.h opt-A2.h
 malloctest.o: ../../test/malloctest.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \
@@ -410,7 +409,7 @@ malloctest.o: ../../test/malloctest.c ../../include/types.h \
   ../../include/spinlock.h includelinks/machine/spinlock.h \
   ../../include/threadlist.h includelinks/machine/thread.h \
   ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
-  ../../include/synch.h ../../include/test.h
+  ../../include/synch.h ../../include/test.h opt-A2.h
 synchtest.o: ../../test/synchtest.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \
@@ -419,7 +418,7 @@ synchtest.o: ../../test/synchtest.c ../../include/types.h \
   includelinks/machine/spinlock.h ../../include/threadlist.h \
   includelinks/machine/thread.h ../../include/setjmp.h \
   includelinks/kern/machine/setjmp.h ../../include/synch.h \
-  ../../include/test.h
+  ../../include/test.h opt-A2.h
 threadtest.o: ../../test/threadtest.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \
@@ -427,7 +426,7 @@ threadtest.o: ../../test/threadtest.c ../../include/types.h \
   ../../include/spinlock.h includelinks/machine/spinlock.h \
   ../../include/threadlist.h includelinks/machine/thread.h \
   ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
-  ../../include/synch.h ../../include/test.h
+  ../../include/synch.h ../../include/test.h opt-A2.h
 tt3.o: ../../test/tt3.c ../../include/types.h ../../include/kern/types.h \
   includelinks/kern/machine/types.h includelinks/machine/types.h \
   ../../include/lib.h ../../include/cdefs.h opt-noasserts.h \
@@ -435,7 +434,7 @@ tt3.o: ../../test/tt3.c ../../include/types.h ../../include/kern/types.h \
   ../../include/spinlock.h includelinks/machine/spinlock.h \
   ../../include/threadlist.h includelinks/machine/thread.h \
   ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
-  ../../include/synch.h ../../include/test.h opt-synchprobs.h
+  ../../include/synch.h ../../include/test.h opt-A2.h opt-synchprobs.h
 uw-tests.o: ../../test/uw-tests.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/synch.h \
@@ -444,7 +443,7 @@ uw-tests.o: ../../test/uw-tests.c ../../include/types.h \
   ../../include/array.h ../../include/lib.h opt-noasserts.h \
   ../../include/threadlist.h includelinks/machine/thread.h \
   ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
-  ../../include/test.h ../../include/uw-vmstats.h
+  ../../include/test.h opt-A2.h ../../include/uw-vmstats.h
 clock.o: ../../thread/clock.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \
@@ -523,9 +522,9 @@ vfscwd.o: ../../vfs/vfscwd.c ../../include/types.h \
   ../../include/stat.h ../../include/kern/stat.h \
   ../../include/kern/stattypes.h ../../include/lib.h \
   ../../include/cdefs.h opt-noasserts.h ../../include/uio.h \
-  ../../include/kern/iovec.h ../../include/proc.h \
+  ../../include/kern/iovec.h ../../include/proc.h ../../include/array.h \
   ../../include/spinlock.h includelinks/machine/spinlock.h \
-  ../../include/thread.h ../../include/array.h ../../include/threadlist.h \
+  ../../include/thread.h ../../include/threadlist.h \
   includelinks/machine/thread.h ../../include/setjmp.h \
   includelinks/kern/machine/setjmp.h opt-A2.h ../../include/current.h \
   includelinks/machine/current.h ../../include/vfs.h ../../include/fs.h \
@@ -699,8 +698,7 @@ trap.o: ../../arch/mips/locore/trap.c ../../include/types.h \
   ../../include/array.h includelinks/machine/thread.h \
   ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
   ../../include/current.h includelinks/machine/current.h \
-  ../../include/vm.h ../../include/mainbus.h ../../include/syscall.h \
-  opt-A2.h
+  ../../include/vm.h ../../include/mainbus.h ../../include/syscall.h
 syscall.o: ../../arch/mips/syscall/syscall.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/kern/errno.h \
@@ -711,8 +709,7 @@ syscall.o: ../../arch/mips/syscall/syscall.c ../../include/types.h \
   includelinks/machine/thread.h ../../include/setjmp.h \
   includelinks/kern/machine/setjmp.h ../../include/current.h \
   includelinks/machine/current.h ../../include/syscall.h opt-A2.h \
-  opt-A2.h ../../include/proc.h ../../include/addrspace.h \
-  ../../include/vm.h includelinks/machine/vm.h
+  ../../include/proc.h opt-A2.h
 cpu.o: ../../arch/mips/thread/cpu.c ../../include/types.h \
   ../../include/kern/types.h includelinks/kern/machine/types.h \
   includelinks/machine/types.h ../../include/lib.h ../../include/cdefs.h \
@@ -749,7 +746,7 @@ dumbvm.o: ../../arch/mips/vm/dumbvm.c ../../include/types.h \
   ../../include/lib.h ../../include/cdefs.h opt-noasserts.h \
   ../../include/spl.h ../../include/spinlock.h \
   includelinks/machine/spinlock.h ../../include/proc.h \
-  ../../include/thread.h ../../include/array.h ../../include/threadlist.h \
+  ../../include/array.h ../../include/thread.h ../../include/threadlist.h \
   includelinks/machine/thread.h ../../include/setjmp.h \
   includelinks/kern/machine/setjmp.h opt-A2.h ../../include/current.h \
   includelinks/machine/current.h includelinks/mips/tlb.h \
