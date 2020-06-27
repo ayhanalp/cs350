@@ -285,8 +285,6 @@ proc_destroy(struct proc *proc)
 	spinlock_cleanup(&proc->p_lock);
 
 #if OPT_A2
-	kfree(proc->p_name);
-        kfree(proc);
 
 	array_cleanup(&proc->p_arr_child);
 	
@@ -294,6 +292,9 @@ proc_destroy(struct proc *proc)
 	lock_destroy(proc->p_lk_exit);
 	
 	cv_destroy(proc->p_cv_wait);
+
+	kfree(proc->p_name);
+        kfree(proc);
 
 #endif /* Optional for ASSGN2 */
 
