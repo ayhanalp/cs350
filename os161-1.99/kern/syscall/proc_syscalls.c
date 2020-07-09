@@ -239,139 +239,144 @@ pid_t sys_fork(pid_t *return_val,struct trapframe *trp_frm){
 
 #if OPT_A2
 
-int sys_execv(const char *program, char **uargs) {
-    struct addrspace *as_new;
-    struct addrspace *as_old;
-	struct vnode *v;
-	vaddr_t entrypoint, stackptr;
-	int result;
-    size_t size;
+int sys_execv(const char * p_name, char ** args)
+{
+  vaddr_t entrypoint, stackptr;
+  int result;
 
-    char *program_kernel;
-    size_t program_size;
-    char **uargs_kernel;
-    vaddr_t *uargs_user;
-    size_t uargs_size;
+  (void)args;
 
-    // ensure valid program and arguments
-    if (program == NULL || uargs == NULL) {
-        return(EFAULT);
+  struct addrspace *addr_spc;
+  struct vnode *v_node;
+
+  // copy over program name into kernel space
+  size_t prgrm_nm_sz = (strlen(p_name)+1)*sizeof(char);
+
+  char * prgrm_nm_kern = kmalloc(prgrm_nm_sz);
+  KASSERT(prgrm_nm_kern != NULL);
+  
+  int error = copyin((const_userptr_t) p_name, (void *) prgrm_nm_kern, prgrm_nm_sz);
+  
+  KASSERT(error == 0);
+
+
+  // count number of args and copy into kernel
+  int nargs = 0;
+  for (int ii = 0; args[ii] != NULL; ii++)
+  {
+    nargs++;
+  }
+
+  // copy program args into kernel
+  size_t args_arr_sz = (nargs+1)*sizeof(char *);
+  char ** args_kern = kmalloc(args_arr_sz);
+  KASSERT(args_kern != NULL);
+
+  for (int ii = 0; ii <= nargs; ii++)
+  {
+    if (ii == nargs)
+    {
+      args_kern[ii] = NULL;
     }
-
-    // copy program from user space into kernel space
-    program_kernel = (char *) kmalloc(sizeof(char) * PATH_MAX);
-    if (program_kernel == NULL) {
-        return(ENOMEM);
+    else
+    {
+      size_t arg_sz = (strlen(args[ii])+1)*sizeof(char);
+      args_kern[ii] = kmalloc(arg_sz);
+      KASSERT(args_kern[ii] != NULL);
+      int error = copyin((const_userptr_t) args[ii], (void *) args_kern[ii], arg_sz);
+      KASSERT(error == 0);
     }
-    result = copyinstr((const_userptr_t) program, program_kernel, PATH_MAX, &program_size);
-    if (result || program_size <= 1) {
-       kfree(program_kernel);
-       return(EINVAL);
+  }
+
+
+  /* Open the file. */
+  result = vfs_open(prgrm_nm_kern, O_RDONLY, 0, &v_node);
+  if (result == 1)
+  {
+  	return result;
+  }
+
+  /* We should be a new process. */
+  /* KASSERT(curproc_getas() == NULL); */
+
+  /* Create a new address space. */
+  addr_spc = as_create();
+  if (NULL ==addr_spc)
+  {
+	vfs_close(v_node);
+	return ENOMEM;
+  }
+
+  /* Switch to it and activate it. */
+  struct addrspace * x_addr_spc = curproc_setas(addr_spc);
+  as_activate();
+
+  /* Load the executable. */
+  result = load_elf(v_node, &entrypoint);
+  if (result == 1)
+  {
+	/* p_addrspace will go away when curproc is destroyed */
+	vfs_close(v_node);
+	return result;
+  }
+
+  /* Done with the file now. */
+  vfs_close(v_node);
+
+  /* Define the user stack in the address space */
+  result = as_define_stack(addr_spc, &stackptr);
+  if (result == 1)
+  {
+	/* p_addrspace will go away when curproc is destroyed */
+	return result;
+  }
+
+  //HARD PART: COPY ARGS TO USER STACK
+  vaddr_t tmp_stack_ptr = stackptr;
+  vaddr_t *stack_args = kmalloc((nargs+1)*sizeof(vaddr_t));
+
+  for (int ii = nargs; ii >= 0; ii--)
+  {
+    if (ii == nargs)
+    {
+      stack_args[ii] = (vaddr_t) NULL;
+      continue;
     }
+    size_t arg_len = ROUNDUP(strlen(args_kern[ii])+1, 4);
+    size_t arg_sz = arg_len*sizeof(char);
+    tmp_stack_ptr = tmp_stack_ptr - arg_sz;
+    int error = copyout((void *) args_kern[ii], (userptr_t) tmp_stack_ptr, arg_len);
+    KASSERT(error == 0);
+    stack_args[ii] = tmp_stack_ptr;
+  }
 
-    // copy arguments from user space into kernel space
-    uargs_size = 0;
-    while (uargs[uargs_size] != NULL) {
-        uargs_size ++;
-    }
+  for (int ii = nargs; ii >= 0; ii--)
+  {
+    size_t str_ptr_sz = sizeof(vaddr_t);
+    tmp_stack_ptr = tmp_stack_ptr - str_ptr_sz;
+    int error = copyout((void *) &stack_args[ii], (userptr_t) tmp_stack_ptr, str_ptr_sz);
+    KASSERT(error == 0);
+  }
+  // HARD PART: COPY ARGS TO USER STACK
 
-    uargs_kernel = (char **) kmalloc(sizeof(char *) * (uargs_size + 1));
-    for (size_t i = 0; i < uargs_size; ++i) {
-        uargs_kernel[i] = (char *) kmalloc(sizeof(char) * PATH_MAX);
-        result = copyinstr((const_userptr_t) uargs[i], uargs_kernel[i], PATH_MAX, &size);
-        if (result) {
-            kfree(program_kernel);
-            kfree(uargs_kernel);
-            return(EFAULT);
-        }
-    }
-    uargs_kernel[uargs_size] = NULL;
+  as_destroy(x_addr_spc);
+  kfree(prgrm_nm_kern);
+  // might want to free args_kernel
+  for (int ii = 0; ii <= nargs; ii++)
+  {
+    kfree(args_kern[ii]);
+  }
+  kfree(args_kern);
 
-	// open the file
-	result = vfs_open(program_kernel, O_RDONLY, 0, &v);
-	if (result) {
-        kfree(program_kernel);
-        kfree(uargs_kernel);
-		return result;
-	}
+	/* Warp to user mode. */
+	enter_new_process(nargs /*argc*/, (userptr_t) tmp_stack_ptr /*userspace addr of argv*/,
+			  ROUNDUP(tmp_stack_ptr, 8), entrypoint);
 
-    // create new address space
-    as_new = as_create();
-    if (as_new == NULL) {
-        kfree(program_kernel);
-        kfree(uargs_kernel);
-        vfs_close(v);
-        return(ENOMEM);
-    }
-
-    // set new address space, delete old address space, and activate new address space
-    as_old = curproc_setas(as_new);
-    as_destroy(as_old);
-    as_activate();
-
-    // load the executable
-	result = load_elf(v, &entrypoint);
-	if (result) {
-		// p_addrspace will go away when curproc is destroyed
-        kfree(program_kernel);
-        kfree(uargs_kernel);
-		vfs_close(v);
-		return result;
-	}
-
-    // done with the file now
-    vfs_close(v);
-
-    // define the user stack in the address space
-	result = as_define_stack(as_new, &stackptr);
-	if (result) {
-		// p_addrspace will go away when curproc is destroyed
-        kfree(program_kernel);
-        kfree(uargs_kernel);
-		return result;
-	}
-
-    // copy argument strings into user space, and keep track of virtual address
-    uargs_user = (vaddr_t *) kmalloc(sizeof(vaddr_t) * (uargs_size + 1));
-    for (size_t i = 0; i < uargs_size; ++i) {
-        size = ROUNDUP(strlen(uargs_kernel[i]) + 1, 8);
-        stackptr -= size;
-        result = copyoutstr((const char *) uargs_kernel[i], (userptr_t) stackptr, size, &size);
-        if (result) {
-            kfree(program_kernel);
-            kfree(uargs_kernel);
-            kfree(uargs_user);
-            return result;
-        }
-
-        uargs_user[i] = stackptr;
-    }
-    uargs_user[uargs_size] = (vaddr_t) NULL;
-
-    // copy argument array of virtual address into user space
-    size = sizeof(vaddr_t) * (uargs_size + 1);
-    stackptr -= ROUNDUP(size, 8);
-    result = copyout((const void *) uargs_user, (userptr_t) stackptr, size);
-    if (result) {
-        kfree(program_kernel);
-        kfree(uargs_kernel);
-        kfree(uargs_user);
-    }
-
-    // free kernel space program and arguments
-    kfree(program_kernel);
-    kfree(uargs_kernel);
-
-	// warp to user mode
-	enter_new_process(uargs_size /*argc*/,
-            (userptr_t) stackptr /*userspace addr of argv*/,
-            stackptr,
-            entrypoint);
-
-	// enter_new_process does not return
+	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
-	return(EINVAL);
+  return EINVAL;
+
 }
 
-#endif /* OPT_A2 */
+#endif /* Optional for ASSGN2 */
 

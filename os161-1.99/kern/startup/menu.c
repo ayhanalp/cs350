@@ -93,6 +93,25 @@ cmd_progthread(void *ptr, unsigned long nargs)
 
 	KASSERT(nargs >= 1);
 
+
+#if OPT_A2
+      KASSERT(strlen(args[0]) < sizeof(progname));
+      strcpy(progname, args[0]);
+
+    char *args_cp[128];
+
+    if (nargs > 128) {
+        kprintf("Warning: too many arguments\n");
+    }
+
+    for (size_t i = 0; i < nargs; ++i) {
+        args_cp[i] = kstrdup(args[i]);
+    }
+    args_cp[nargs] = NULL;
+
+    result = runprogram(progname, args_cp, nargs);
+
+#else
 	if (nargs > 2) {
 		kprintf("Warning: argument passing from menu not supported\n");
 	}
@@ -104,6 +123,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
 
 	result = runprogram(progname, args, nargs); // added for A2a
 	// result = runprogram(progname); Commented for A2a
+#endif /* Optional for ASSGN2 */
 	if (result) {
 		kprintf("Running program %s failed: %s\n", args[0],
 			strerror(result));

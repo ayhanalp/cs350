@@ -86,7 +86,7 @@ int nettest(int, char **);
 /* Routine for running a user-level program. */
 int bs_req_for(int count, size_t typesize);
 #if OPT_A2
-int runprogram(char *progname, char **args, unsigned long argc);
+int runprogram(char *progname, char **args, int nargs);
 #else
 int runprogram(char *progname);
 #endif /* Optional for ASSGN2 */

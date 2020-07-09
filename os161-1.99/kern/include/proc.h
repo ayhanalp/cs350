@@ -51,11 +51,31 @@ struct vnode;
 struct semaphore;
 #endif // UW
 
+
+
+// Ayhan
+#if OPT_A2
+struct proc_info {
+  struct proc * proc_addr;
+  pid_t pid;
+  int exit_code;
+};
+#endif
+
 /*
  * Process structure.
  */
 struct proc {
   	char *p_name;
+
+#if OPT_A2
+  pid_t pid;
+  struct array* children_info; // holds addresses to proc_info structs
+  struct cv *is_dying;
+  struct lock *child_lock; // many children could be modifying children_info array
+  struct proc *parent;
+  struct trapframe *tf;
+#endif	
 
 #if OPT_A2
   	pid_t p_proc_id;
@@ -118,6 +138,14 @@ struct addrspace *curproc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *curproc_setas(struct addrspace *);
 
+
+struct proc* find_proc_w_proc_id(pid_t proc_id);
+
+// Ayhan
+/* Set the address space of proc, return old one */
+struct addrspace * proc_setas(struct addrspace *newas, struct proc *proc);
+
+
 pid_t get_proc_id(void);
 
 void add_prc(struct array *procs, struct proc*p);
@@ -128,6 +156,6 @@ void add_prc_v1(struct proc *p);
 
 unsigned find_proc_id(struct array *procs, pid_t proc_id);
 struct proc * proc_id_w_proc(struct array *procs, pid_t proc_id);
-struct proc* find_proc_w_proc_id(pid_t proc_id);
+
 
 #endif /* _PROC_H_ */
