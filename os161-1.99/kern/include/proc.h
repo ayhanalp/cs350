@@ -142,9 +142,6 @@ struct addrspace *curproc_setas(struct addrspace *);
 struct proc* find_proc_w_proc_id(pid_t proc_id);
 
 // Ayhan
-/* Set the address space of proc, return old one */
-struct addrspace * proc_setas(struct addrspace *newas, struct proc *proc);
-
 
 pid_t get_proc_id(void);
 

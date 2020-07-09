@@ -301,7 +301,7 @@ int sys_execv(const char * p_name, char ** args)
 
   /* Create a new address space. */
   addr_spc = as_create();
-  if (NULL ==addr_spc)
+  if (NULL == addr_spc)
   {
 	vfs_close(v_node);
 	return ENOMEM;
@@ -379,4 +379,3 @@ int sys_execv(const char * p_name, char ** args)
 }
 
 #endif /* Optional for ASSGN2 */
-

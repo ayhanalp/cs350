@@ -1,3 +1,4 @@
+ 
 /*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
@@ -118,11 +119,7 @@ syscall(struct trapframe *tf)
 #if OPT_A2
 	case SYS_fork:
 	  err = sys_fork((pid_t *)&retval,tf);
-	  break;
-  	
-	case SYS_execv:
-	  err = sys_execv((const char *) tf->tf_a0, (char **) tf->tf_a1);
-	  break;	  
+	  break;	
 #endif /* Optional for ASSGN2 */
 
 #ifdef UW
