@@ -138,9 +138,12 @@ void remove_prc_v1(pid_t proc_id)
 
 	if (array_num(overall) == 0) {
 		// See C funcs
+		
 		array_cleanup(overall);
+
 		array_destroy(overall);
-    		overall = NULL;
+    		
+		overall = NULL;
   	}
 }
 

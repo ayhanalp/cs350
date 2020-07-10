@@ -331,7 +331,7 @@ int sys_execv(const char * p_name, char ** args)
 	return result;
   }
 
-  //HARD PART: COPY ARGS TO USER STACK
+  // CP ARGS USR_STACK
   vaddr_t tmp_stack_ptr = stackptr;
   vaddr_t *stack_args = kmalloc((nargs+1)*sizeof(vaddr_t));
 
@@ -357,7 +357,7 @@ int sys_execv(const char * p_name, char ** args)
     int error = copyout((void *) &stack_args[ii], (userptr_t) tmp_stack_ptr, str_ptr_sz);
     KASSERT(error == 0);
   }
-  // HARD PART: COPY ARGS TO USER STACK
+  // CP ARGS USR_STACK
 
   as_destroy(x_addr_spc);
   kfree(prgrm_nm_kern);

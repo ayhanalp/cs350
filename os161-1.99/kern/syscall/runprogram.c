@@ -46,7 +46,9 @@
 #include <test.h>
 
 #if OPT_A2
+
 #include <copyinout.h>
+
 #endif /* Optional for ASSGN2 */
 
 // Ayhan Alp Aydeniz - aaaydeni
@@ -64,11 +66,15 @@ runprogram(char *progname, char ** args, int nargs)
 
 #else
 runprogram(char *progname)
+
 #endif /* Optional for ASSGN2 */
+
 {
-	struct addrspace *addr_spc;
-	struct vnode *v_node;
 	vaddr_t entrypoint, stackptr;
+
+	struct addrspace *addr_spc;
+        struct vnode *v_node;
+
 	int result;
 
 	/* Open the file. */
@@ -98,6 +104,7 @@ runprogram(char *progname)
 
 	/* Load the executable. */
 	result = load_elf(v_node, &entrypoint);
+	
 	if (result == 1)
 	{
 		/* p_addrspace will go away when curproc is destroyed */
@@ -118,8 +125,11 @@ runprogram(char *progname)
 		return result;
 	}
 #if OPT_A2
-  //HARD PART: COPY ARGS TO USER STACK
+  
+  // CP ARGS USR_STACK
+  
   char ** args_kern = args;
+  
   vaddr_t tmp_stack_ptr = stackptr;
   vaddr_t *stack_args = kmalloc((nargs + 1) * sizeof(vaddr_t));
 
@@ -130,10 +140,13 @@ runprogram(char *progname)
       stack_args[ii] = (vaddr_t) NULL;
       continue;
     }
+    
     size_t arg_len = ROUNDUP(strlen(args_kern[ii]) + 1, 4);
     size_t arg_sz = arg_len * sizeof(char);
+    
     tmp_stack_ptr = tmp_stack_ptr - arg_sz;
     int error = copyout((void *) args_kern[ii], (userptr_t) tmp_stack_ptr, arg_len);
+    
     KASSERT(error == 0);
     stack_args[ii] = tmp_stack_ptr;
   }
@@ -141,11 +154,14 @@ runprogram(char *progname)
   for (int ii = nargs; ii >= 0; ii--)
   {
     size_t str_ptr_sz = sizeof(vaddr_t);
+   
     tmp_stack_ptr = tmp_stack_ptr - str_ptr_sz;
+   
     int error = copyout((void *) &stack_args[ii], (userptr_t) tmp_stack_ptr, str_ptr_sz);
+   
     KASSERT(error == 0);
   }
-  // HARD PART: COPY ARGS TO USER STACK
+  // CP ARGS USR_STACK
   enter_new_process(nargs /*argc*/, (userptr_t) tmp_stack_ptr /*userspace addr of argv*/,
 			  ROUNDUP(tmp_stack_ptr, 8), entrypoint);
   as_destroy(x_addr_spc);

@@ -124,6 +124,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
 	result = runprogram(progname, args, nargs); // added for A2a
 	// result = runprogram(progname); Commented for A2a
 #endif /* Optional for ASSGN2 */
+	
 	if (result) {
 		kprintf("Running program %s failed: %s\n", args[0],
 			strerror(result));
