@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2013
  *	The President and Fellows of Harvard College.
@@ -30,19 +31,16 @@
 #ifndef _PROC_H_
 #define _PROC_H_
 
-// Ayhan Alp Aydeniz
-
 /*
  * Definition of a process.
  *
  * Note: curproc is defined by <current.h>.
  */
 
-#include <array.h>
-#include <types.h>
-
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
+#include <limits.h>
+#include <synch.h>
 #include "opt-A2.h"
 
 struct addrspace;
@@ -51,44 +49,35 @@ struct vnode;
 struct semaphore;
 #endif // UW
 
-
-
-// Ayhan
 #if OPT_A2
-struct proc_info {
-  struct proc * proc_addr;
-  pid_t pid;
-  int exit_code;
-};
-#endif
+/*
+ * Process id & exit code storage structure.
+ */
+typedef struct procdata {
+	pid_t p_pid;
+	bool p_exited;
+	int p_exit_code;
+	struct procdata *p_firstchild;
+	struct procdata *p_nextsibling;
+	struct procdata *p_parent;
+} procdata_t ;
+
+extern struct lock *procdata_lock;
+extern struct cv *procdata_cv;
+extern bool pid_use[PID_MAX + 1];
+
+pid_t procdata_find_free_pid(procdata_t *parent);
+procdata_t *procdata_create(pid_t pid, procdata_t *parent);
+void procdata_destroy(procdata_t *procdata);
+
+#endif // OPT_A2
 
 /*
  * Process structure.
  */
 struct proc {
-  	char *p_name;
-
-#if OPT_A2
-  pid_t pid;
-  struct array* children_info; // holds addresses to proc_info structs
-  struct cv *is_dying;
-  struct lock *child_lock; // many children could be modifying children_info array
-  struct proc *parent;
-  struct trapframe *tf;
-#endif	
-
-#if OPT_A2
-  	pid_t p_proc_id;
-  	struct array p_arr_child;
-  	struct cv *p_cv_wait;
-  	struct lock *p_lk_wait;
-  	struct lock *p_lk_exit;
-  	bool p_iSexit;
-  	int p_exitcode;
-  
-#endif /* Optional for ASSGN2 */
-	
-  	struct spinlock p_lock;		/* Lock for this structure */
+	char *p_name;			/* Name of this process */
+	struct spinlock p_lock;		/* Lock for this structure */
 	struct threadarray p_threads;	/* Threads in this process */
 
 	/* VM */
@@ -98,15 +87,18 @@ struct proc {
 	struct vnode *p_cwd;		/* current working directory */
 
 #ifdef UW
-  /* a vnode to refer to the console device */
-  /* this is a quick-and-dirty way to get console writes working */
-  /* you will probably need to change this when implementing file-related
-     system calls, since each process will need to keep track of all files
-     it has opened, not just the console. */
-  struct vnode *console;                /* a vnode for the console device */
+	/* a vnode to refer to the console device */
+	/* this is a quick-and-dirty way to get console writes working */
+	/* you will probably need to change this when implementing file-related
+		 system calls, since each process will need to keep track of all files
+		 it has opened, not just the console. */
+	struct vnode *console;                /* a vnode for the console device */
 #endif
 
 	/* add more material here as needed */
+#if OPT_A2
+	procdata_t *p_data;
+#endif // OPT_A2
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */
@@ -122,6 +114,9 @@ void proc_bootstrap(void);
 
 /* Create a fresh process for use by runprogram(). */
 struct proc *proc_create_runprogram(const char *name);
+#if OPT_A2
+struct proc *proc_create_runprogram2(const char *name);
+#endif // OPT_A2
 
 /* Destroy a process. */
 void proc_destroy(struct proc *proc);
@@ -137,22 +132,6 @@ struct addrspace *curproc_getas(void);
 
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *curproc_setas(struct addrspace *);
-
-
-struct proc* find_proc_w_proc_id(pid_t proc_id);
-
-// Ayhan
-
-pid_t get_proc_id(void);
-
-void add_prc(struct array *procs, struct proc*p);
-void remove_prc(struct array *procs, pid_t proc_id);
-void remove_prc_v1(pid_t proc_id);
-void add_prc_v1(struct proc *p);
-
-
-unsigned find_proc_id(struct array *procs, pid_t proc_id);
-struct proc * proc_id_w_proc(struct array *procs, pid_t proc_id);
 
 
 #endif /* _PROC_H_ */

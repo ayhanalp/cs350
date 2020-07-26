@@ -50,21 +50,22 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
-#include "opt-A2.h"
-
-// Ayhan Alp Aydeniz - aaaydeni
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
  */
 struct proc *kproc;
+#if OPT_A2
+struct lock *procdata_lock;
+struct cv *procdata_cv;
+#endif // OPT_A2
 
 /*
  * Mechanism for making the kernel menu thread sleep while processes are running
  */
 #ifdef UW
 /* count of the number of processes, excluding kproc */
-static volatile unsigned int proc_count;
+static unsigned int proc_count;
 /* provides mutual exclusion for proc_count */
 /* it would be better to use a lock here, but we use a semaphore because locks are not implemented in the base kernel */ 
 static struct semaphore *proc_count_mutex;
@@ -74,81 +75,111 @@ struct semaphore *no_proc_sem;
 
 
 #if OPT_A2
+bool pid_use[PID_MAX + 1];
 
-struct array *overall;
-
-pid_t curr_proc_id = 0; // that must be initialized by "1"
-
-
-pid_t get_proc_id()
-{ 
-	return curr_proc_id = curr_proc_id + 1;
-}
-
-unsigned find_proc_id(struct array *procs, pid_t proc_id) {
-
-  for(unsigned ii = 0; ii < array_num(procs); ii++)
-  {
-    struct proc * p = array_get(procs, ii);
-   
-    if(proc_id == p->p_proc_id)
-    {
-	    return ii;
-    }
-  }
-
-  return -1;
-}
-
-
-struct proc * proc_id_w_proc(struct array *procs, pid_t proc_id)
+pid_t procdata_find_free_pid(procdata_t *parent)
 {
-	return array_get(procs, find_proc_id(procs, proc_id));
+	//Try to assign a PID
+	int pid = -1;
+
+	for(int i = 0; i <= PID_MAX; i++) {
+		//PID is not used
+		if(!pid_use[i]) {
+			if(parent == NULL) {
+				pid = i;
+				break;
+			}
+			//Check if one of the children used this pid before
+			else {
+				DEBUG(DB_PROCSYS, "Free pid %d\n", i);
+				bool reallyfree = true;
+				procdata_t *child = parent->p_firstchild;
+				while(child != NULL) {
+					DEBUG(DB_PROCSYS, "Checking child %d\n", child->p_pid);
+					if(child->p_pid == i) {
+						reallyfree = false;
+						break;
+					}
+					child = child->p_nextsibling;
+				}
+				//Ok so we found a PID that we can use!
+				if(reallyfree) {
+					pid = i;
+					break;
+				}
+			}
+		}
+	}
+
+	return pid;
 }
 
-struct proc * find_proc_w_proc_id(pid_t proc_id)
+procdata_t *procdata_create(pid_t pid, procdata_t *parent)
 {
-      	return proc_id_w_proc(overall, proc_id);
+	procdata_t *procdata = kmalloc(sizeof(procdata_t));
+	if (procdata == NULL) {
+		return NULL;
+	}
+
+	procdata->p_pid = pid;
+	procdata->p_exited = false;
+	procdata->p_exit_code = 0;
+	procdata->p_firstchild = NULL;
+	procdata->p_nextsibling = NULL;
+	procdata->p_parent = parent;
+
+	//Add proc to parent tree
+	if(parent != NULL) {
+		//First node
+		if(parent->p_firstchild == NULL) {
+			parent->p_firstchild = procdata;
+		}
+		//Sibling node
+		else {
+			procdata_t *sibling = parent->p_firstchild;
+			while(sibling->p_nextsibling != NULL) {
+				sibling = sibling->p_nextsibling;
+			}
+			sibling->p_nextsibling = procdata;
+		}
+	}
+
+	return procdata;
 }
 
-void add_prc(struct array *procs, struct proc *proc)
+void procdata_destroy(procdata_t *procdata)
 {
-	array_add(procs, proc, NULL);
+	KASSERT(procdata != NULL);
+
+	//Clean proc tree by unlinking parent
+	procdata_t *child = procdata->p_firstchild;
+	while(child != NULL) {
+		child->p_parent = NULL;
+		child = child->p_nextsibling;
+	}
+
+	procdata_t *parent = procdata->p_parent;
+	//Clean siblings
+	if(parent != NULL) {
+		//First node
+		procdata_t *child = parent->p_firstchild;
+		if(child == procdata) {
+			parent->p_firstchild = NULL;
+		}
+		else if(child != NULL) {
+			while(child->p_nextsibling != NULL) {
+				if(child->p_nextsibling == procdata) {
+					child->p_nextsibling = procdata->p_nextsibling;
+					break;
+				}
+				child = child->p_nextsibling;
+			}
+		}
+	}
+
+	kfree(procdata);
 }
-
-void add_prc_v1(struct proc *proc)
-{
-	if (NULL == overall)
-	{
-		overall = array_create();
-    		array_init(overall);
-  	}
-  	
-	add_prc(overall, proc);
-}
-
-void remove_prc(struct array *procs, pid_t proc_id)
-{
-	array_remove(procs, find_proc_id(procs, proc_id));
-}
-
-void remove_prc_v1(pid_t proc_id)
-{
-	remove_prc(overall, proc_id);
-
-	if (array_num(overall) == 0) {
-		// See C funcs
-		
-		array_cleanup(overall);
-
-		array_destroy(overall);
-    		
-		overall = NULL;
-  	}
-}
-
-#endif
-
+#endif // OPT_A2
 
 /*
  * Create a proc structure.
@@ -157,73 +188,36 @@ static
 struct proc *
 proc_create(const char *name)
 {
-        struct proc *proc;
+	struct proc *proc;
 
-        proc = kmalloc(sizeof(*proc));
-        
-	if (proc == NULL)
-	{
-                return NULL;
-        }
-        
+	proc = kmalloc(sizeof(*proc));
+	if (proc == NULL) {
+		return NULL;
+	}
 	proc->p_name = kstrdup(name);
-        
-	if (proc->p_name == NULL)
-	{
-                kfree(proc);
-                return NULL;
-        }
+	if (proc->p_name == NULL) {
+		kfree(proc);
+		return NULL;
+	}
 
-        threadarray_init(&proc->p_threads);
-        
+	threadarray_init(&proc->p_threads);
 	spinlock_init(&proc->p_lock);
 
-        proc->p_addrspace = NULL;
+	/* VM fields */
+	proc->p_addrspace = NULL;
 
-        
-        proc->p_cwd = NULL;
+	/* VFS fields */
+	proc->p_cwd = NULL;
 
 #ifdef UW
-        proc->console = NULL;
+	proc->console = NULL;
 #endif // UW
-
 #if OPT_A2
+	proc->p_data = NULL;
+#endif // OPT_A2
 
-        proc->p_exitcode = 0;
-	proc->p_proc_id = get_proc_id();
-        proc->p_iSexit = false;
-        
-        proc->p_lk_wait = lock_create("waitlk");
-        
-	if (NULL == proc->p_lk_wait)
-	{
-        	panic("proc_create could not create wait lock");
-        }
-        
-	proc->p_lk_exit = lock_create("p_lk_exit");
-        
-	if(NULL == proc->p_lk_exit)
-	{
-        	panic("proc_create could not create exit lock");
-        }
-        
-	proc->p_cv_wait = cv_create("waitcv");
-        
-	if(NULL == proc->p_cv_wait)
-	{
-          panic("proc_create could not create wait cv");
-        
-	}
-        
-	proc->p_arr_child = *array_create();
-        array_init(&proc->p_arr_child);
-        add_prc_v1(proc);
-
-#endif /* Optional for ASSGN2 */
-
-        return proc;
+	return proc;
 }
-
 
 /*
  * Destroy a proc structure.
@@ -232,19 +226,17 @@ void
 proc_destroy(struct proc *proc)
 {
 	/*
-         * note: some parts of the process structure, such as the address space,
-         *  are destroyed in sys_exit, before we get here
-         *
-         * note: depending on where this function is called from, curproc may not
-         * be defined because the calling thread may have already detached itself
-         * from the process.
+	 * note: some parts of the process structure, such as the address space,
+	 *  are destroyed in sys_exit, before we get here
+	 *
+	 * note: depending on where this function is called from, curproc may not
+	 * be defined because the calling thread may have already detached itself
+	 * from the process.
 	 */
 
+	KASSERT(proc != NULL);
 	KASSERT(proc != kproc);
-	KASSERT(NULL != proc);
 
-
-	remove_prc_v1(proc->p_proc_id);
 	/*
 	 * We don't take p_lock in here because we must have the only
 	 * reference to this structure. (Otherwise it would be
@@ -280,44 +272,33 @@ proc_destroy(struct proc *proc)
 
 #ifdef UW
 	if (proc->console) {
-	  vfs_close(proc->console);
+		vfs_close(proc->console);
 	}
 #endif // UW
 
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 
-#if OPT_A2
-
-	array_cleanup(&proc->p_arr_child);
-	
-	lock_destroy(proc->p_lk_wait);
-	lock_destroy(proc->p_lk_exit);
-	
-	cv_destroy(proc->p_cv_wait);
-
 	kfree(proc->p_name);
-        kfree(proc);
-
-#endif /* Optional for ASSGN2 */
+	kfree(proc);
 
 #ifdef UW
 	/* decrement the process count */
-        /* note: kproc is not included in the process count, but proc_destroy
-	   is never called on kproc (see KASSERT above), so we're OK to decrement
-	   the proc_count unconditionally here */
+	/* note: kproc is not included in the process count, but proc_destroy
+	 *  is never called on kproc (see KASSERT above), so we're OK to decrement
+	 *  the proc_count unconditionally here */
 	P(proc_count_mutex); 
 	KASSERT(proc_count > 0);
 	proc_count--;
 	/* signal the kernel menu thread if the process count has reached zero */
 	if (proc_count == 0) {
-	  V(no_proc_sem);
+		V(no_proc_sem);
 	}
 	V(proc_count_mutex);
 #endif // UW
 	
-}
 
+}
 
 /*
  * Create the process structure for the kernel.
@@ -325,21 +306,34 @@ proc_destroy(struct proc *proc)
 void
 proc_bootstrap(void)
 {
-  kproc = proc_create("[kernel]");
-  if (kproc == NULL) {
-    panic("proc_create for kproc failed\n");
-  }
+	kproc = proc_create("[kernel]");
+	if (kproc == NULL) {
+		panic("proc_create for kproc failed\n");
+	}
+#if OPT_A2
+	procdata_lock = lock_create("procdata_lock");
+	procdata_cv = cv_create("procdata_cv");
+	for(int i = 1; i <= PID_MAX; i++) {
+		pid_use[i] = false;
+	}
+	pid_use[0] = true;
+	procdata_t *kprocdata = procdata_create(0, NULL);
+	if(kprocdata == NULL) {
+		panic("procdata_create for kproc failed\n");
+	}
+	kproc->p_data = kprocdata;
+#endif // OPT_A2
 #ifdef UW
-  proc_count = 0;
-  proc_count_mutex = sem_create("proc_count_mutex",1);
-  if (proc_count_mutex == NULL) {
-    panic("could not create proc_count_mutex semaphore\n");
-  }
-  no_proc_sem = sem_create("no_proc_sem",0);
-  if (no_proc_sem == NULL) {
-    panic("could not create no_proc_sem semaphore\n");
-  }
-#endif // UW
+	proc_count = 0;
+	proc_count_mutex = sem_create("proc_count_mutex",1);
+	if (proc_count_mutex == NULL) {
+		panic("could not create proc_count_mutex semaphore\n");
+	}
+	no_proc_sem = sem_create("no_proc_sem",0);
+	if (no_proc_sem == NULL) {
+		panic("could not create no_proc_sem semaphore\n");
+	}
+#endif // UW 
 }
 
 /*
@@ -351,6 +345,37 @@ proc_bootstrap(void)
 struct proc *
 proc_create_runprogram(const char *name)
 {
+#if OPT_A2
+	lock_acquire(procdata_lock);
+	int pid = procdata_find_free_pid(NULL);
+	if(pid < 0) {
+		lock_release(procdata_lock);
+		return NULL;
+	}
+	pid_use[pid] = true;
+	lock_release(procdata_lock);
+
+	struct proc *proc = proc_create_runprogram2(name);
+	if(proc == NULL) {
+		return NULL;
+	}
+
+	procdata_t *procdata = procdata_create(pid, NULL);
+	if(procdata == NULL) {
+		proc_destroy(proc);
+		return NULL;
+	}
+	proc->p_data = procdata;
+
+	DEBUG(DB_PROCSYS, "Runprogram created PID %d\n", pid);
+
+	return proc;
+}
+
+struct proc *
+proc_create_runprogram2(const char *name)
+{
+#endif // OPT_A2
 	struct proc *proc;
 	char *console_path;
 
@@ -363,14 +388,14 @@ proc_create_runprogram(const char *name)
 	/* open the console - this should always succeed */
 	console_path = kstrdup("con:");
 	if (console_path == NULL) {
-	  panic("unable to copy console path name during process creation\n");
+		panic("unable to copy console path name during process creation\n");
 	}
 	if (vfs_open(console_path,O_WRONLY,0,&(proc->console))) {
-	  panic("unable to open the console during process creation\n");
+		panic("unable to open the console during process creation\n");
 	}
 	kfree(console_path);
 #endif // UW
-	  
+
 	/* VM fields */
 
 	proc->p_addrspace = NULL;
@@ -379,8 +404,8 @@ proc_create_runprogram(const char *name)
 
 #ifdef UW
 	/* we do not need to acquire the p_lock here, the running thread should
-           have the only reference to this process */
-        /* also, acquiring the p_lock is problematic because VOP_INCREF may block */
+	 *  have the only reference to this process */
+	/* also, acquiring the p_lock is problematic because VOP_INCREF may block */
 	if (curproc->p_cwd != NULL) {
 		VOP_INCREF(curproc->p_cwd);
 		proc->p_cwd = curproc->p_cwd;
@@ -396,8 +421,8 @@ proc_create_runprogram(const char *name)
 
 #ifdef UW
 	/* increment the count of processes */
-        /* we are assuming that all procs, including those created by fork(),
-           are created using a call to proc_create_runprogram  */
+	/* we are assuming that all procs, including those created by fork(),
+	 * are created using a call to proc_create_runprogram  */
 	P(proc_count_mutex); 
 	proc_count++;
 	V(proc_count_mutex);
@@ -413,20 +438,19 @@ proc_create_runprogram(const char *name)
 int
 proc_addthread(struct proc *proc, struct thread *t)
 {
-        int result;
+	int result;
 
-        KASSERT(t->t_proc == NULL);
+	KASSERT(t->t_proc == NULL);
 
-        spinlock_acquire(&proc->p_lock);
-        result = threadarray_add(&proc->p_threads, t, NULL);
-        spinlock_release(&proc->p_lock);
-        if (result) {
-                return result;
-        }
-        t->t_proc = proc;
-        return 0;
+	spinlock_acquire(&proc->p_lock);
+	result = threadarray_add(&proc->p_threads, t, NULL);
+	spinlock_release(&proc->p_lock);
+	if (result) {
+		return result;
+	}
+	t->t_proc = proc;
+	return 0;
 }
-
 
 /*
  * Remove a thread from its process. Either the thread or the process
@@ -435,28 +459,27 @@ proc_addthread(struct proc *proc, struct thread *t)
 void
 proc_remthread(struct thread *t)
 {
-        struct proc *proc;
-        unsigned i, num;
+	struct proc *proc;
+	unsigned i, num;
 
-        proc = t->t_proc;
-        KASSERT(proc != NULL);
+	proc = t->t_proc;
+	KASSERT(proc != NULL);
 
-        spinlock_acquire(&proc->p_lock);
-        /* ugh: find the thread in the array */
-        num = threadarray_num(&proc->p_threads);
-        for (i=0; i<num; i++) {
-                if (threadarray_get(&proc->p_threads, i) == t) {
-                        threadarray_remove(&proc->p_threads, i);
-                        spinlock_release(&proc->p_lock);
-                        t->t_proc = NULL;
-                        return;
-                }
-        }
-        /* Did not find it. */
-        spinlock_release(&proc->p_lock);
-        panic("Thread (%p) has escaped from its process (%p)\n", t, proc);
+	spinlock_acquire(&proc->p_lock);
+	/* ugh: find the thread in the array */
+	num = threadarray_num(&proc->p_threads);
+	for (i=0; i<num; i++) {
+		if (threadarray_get(&proc->p_threads, i) == t) {
+			threadarray_remove(&proc->p_threads, i);
+			spinlock_release(&proc->p_lock);
+			t->t_proc = NULL;
+			return;
+		}
+	}
+	/* Did not find it. */
+	spinlock_release(&proc->p_lock);
+	panic("Thread (%p) has escaped from its process (%p)\n", t, proc);
 }
-
 
 /*
  * Fetch the address space of the current process. Caution: it isn't
@@ -466,20 +489,20 @@ proc_remthread(struct thread *t)
 struct addrspace *
 curproc_getas(void)
 {
-        struct addrspace *as;
+	struct addrspace *as;
 #ifdef UW
-        /* Until user processes are created, threads used in testing
-         * (i.e., kernel threads) have no process or address space.
-         */
-        if (curproc == NULL) {
-                return NULL;
-        }
+	/* Until user processes are created, threads used in testing 
+	 * (i.e., kernel threads) have no process or address space.
+	 */
+	if (curproc == NULL) {
+		return NULL;
+	}
 #endif
 
-        spinlock_acquire(&curproc->p_lock);
-        as = curproc->p_addrspace;
-        spinlock_release(&curproc->p_lock);
-        return as;
+	spinlock_acquire(&curproc->p_lock);
+	as = curproc->p_addrspace;
+	spinlock_release(&curproc->p_lock);
+	return as;
 }
 
 /*
@@ -489,12 +512,12 @@ curproc_getas(void)
 struct addrspace *
 curproc_setas(struct addrspace *newas)
 {
-        struct addrspace *oldas;
-        struct proc *proc = curproc;
+	struct addrspace *oldas;
+	struct proc *proc = curproc;
 
-        spinlock_acquire(&proc->p_lock);
-        oldas = proc->p_addrspace;
-        proc->p_addrspace = newas;
-        spinlock_release(&proc->p_lock);
-        return oldas;
+	spinlock_acquire(&proc->p_lock);
+	oldas = proc->p_addrspace;
+	proc->p_addrspace = newas;
+	spinlock_release(&proc->p_lock);
+	return oldas;
 }

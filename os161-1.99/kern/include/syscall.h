@@ -1,3 +1,4 @@
+ 
 /*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
@@ -29,10 +30,9 @@
 
 #ifndef _SYSCALL_H_
 #define _SYSCALL_H_
-
+#include "opt-A2.h"
 #include "opt-A3.h"
 
-// Ayhan Alp Aydeniz - aaaydeni
 
 struct trapframe; /* from <machine/trapframe.h> */
 
@@ -47,9 +47,7 @@ void syscall(struct trapframe *tf);
  */
 
 /* Helper for fork(). You write this. */
- void enter_forked_process(void *trp_frm, unsigned long addr_spc_child);
-
-// void enter_forked_process(struct trapframe *tf);
+void enter_forked_process(struct trapframe *tf);
 
 /* Enter user mode. Does not return. */
 void enter_new_process(int argc, userptr_t argv, vaddr_t stackptr,
@@ -64,15 +62,17 @@ int sys_reboot(int code);
 int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
 
 #ifdef UW
-int sys_fork(pid_t *retval, struct trapframe *tf);
-// int sys_fork(struct trapframe *tf, pid_t *retval);
 int sys_write(int fdesc,userptr_t ubuf,unsigned int nbytes,int *retval);
 void sys__exit(int exitcode);
 int sys_getpid(pid_t *retval);
 int sys_waitpid(pid_t pid, userptr_t status, int options, pid_t *retval);
-// int sys_execv(const char *program, char **args, int32_t *retval);
-int sys_execv(const char *program, char **args);
 
+#if OPT_A2
+int sys_fork(pid_t *retval, struct trapframe *tf);
+int sys_execv(int *retval, userptr_t program, userptr_t args);
+char **execv_copyin_args(userptr_t program, userptr_t args, int *argc_return);
+void sys_fork_new_process(void *ptr, unsigned long nargs);
+#endif // OPT_A2
 #if OPT_A3
 void _sys__exit(int exitcode);
 void terminate_exit(int sig);

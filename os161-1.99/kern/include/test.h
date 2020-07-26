@@ -1,3 +1,4 @@
+ 
 /*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
@@ -29,7 +30,6 @@
 
 #ifndef _TEST_H_
 #define _TEST_H_
-
 #include "opt-A2.h"
 
 /*
@@ -43,7 +43,6 @@ int whalemating(int, char **);
 
 #ifdef UW
 int catmouse(int, char **);
-int traffic_simulation(int, char **);
 #endif
 
 /*
@@ -83,14 +82,14 @@ int malloctest(int, char **);
 int mallocstress(int, char **);
 int nettest(int, char **);
 
-/* Routine for running a user-level program. */
-int bs_req_for(int count, size_t typesize);
 #if OPT_A2
-int runprogram(char *progname, char **args, int nargs);
+int runprogram(int argc, char **argv, bool using_kernel_mem);
+userptr_t runprogram_argv_to_userspace(vaddr_t *stackptr_, int argc, char **argv);
+void runprogram_argv_destroy(int argc, char **argv);
 #else
+/* Routine for running a user-level program. */
 int runprogram(char *progname);
-#endif /* Optional for ASSGN2 */
-
+#endif // OPT_A2
 
 /* Kernel menu system. */
 void menu(char *argstr);

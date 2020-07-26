@@ -1,5 +1,3 @@
-
- 
 /*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
@@ -37,8 +35,6 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
-#include "opt-A2.h"
-#include <proc.h>
 
 
 /*
@@ -79,9 +75,6 @@
  * stack, starting at sp+16 to skip over the slots for the
  * registerized values, with copyin().
  */
-
-// Ayhan Alp Aydeniz - aaaydeni	
-	
 void
 syscall(struct trapframe *tf)
 {
@@ -107,60 +100,51 @@ syscall(struct trapframe *tf)
 	retval = 0;
 
 	switch (callno) {
-	    case SYS_reboot:
+			case SYS_reboot:
 		err = sys_reboot(tf->tf_a0);
 		break;
 
-	    case SYS___time:
+			case SYS___time:
 		err = sys___time((userptr_t)tf->tf_a0,
 				 (userptr_t)tf->tf_a1);
 		break;
+#ifdef UW
+	case SYS_write:
+		err = sys_write((int)tf->tf_a0,
+				(userptr_t)tf->tf_a1,
+				(int)tf->tf_a2,
+				(int *)(&retval));
+		break;
+	case SYS__exit:
+		sys__exit((int)tf->tf_a0);
+		/* sys__exit does not return, execution should not get here */
+		panic("unexpected return from sys__exit");
+		break;
+	case SYS_getpid:
+		err = sys_getpid((pid_t *)&retval);
+		break;
+	case SYS_waitpid:
+		err = sys_waitpid((pid_t)tf->tf_a0,
+					(userptr_t)tf->tf_a1,
+					(int)tf->tf_a2,
+					(pid_t *)&retval);
+		break;
+#endif // UW
 
-
+			/* Add stuff here */
 #if OPT_A2
 	case SYS_fork:
-	  err = sys_fork((pid_t *)&retval,tf);
-	  break;	
-
+		err = sys_fork((pid_t *)&retval, tf);
+		break;
 	case SYS_execv:
-    	  err = sys_execv((char *) tf->tf_a0, (char **)tf->tf_a1);
-   	  break;
-#endif /* Optional for ASSGN2 */
-
-#ifdef UW
-		//	case SYS_fork:
-		//err = sys_fork((pid_t *)&retval,tf);
-
-	case SYS_write:
-	  err = sys_write((int)tf->tf_a0,
-			  (userptr_t)tf->tf_a1,
-			  (int)tf->tf_a2,
-			  (int *)(&retval));
-	  break;
-	case SYS__exit:
-	  sys__exit((int)tf->tf_a0);
-	  /* sys__exit does not return, execution should not get here */
-	  panic("unexpected return from sys__exit");
-	  break;
-	case SYS_getpid:
-	  err = sys_getpid((pid_t *)&retval);
-	  break;
-#endif
-
-#if OPT_A2
-	case SYS_waitpid:
-	  err = sys_waitpid((pid_t)tf->tf_a0,
-			    (userptr_t)tf->tf_a1,
-			    (int)tf->tf_a2,
-			    (pid_t *)&retval);
-	  break;
-#endif // UW
-	    /* Add stuff here */
+		err = sys_execv((int *)&retval, (userptr_t)tf->tf_a0, (userptr_t)tf->tf_a1);
+		break;
+#endif // OPT_A2
  
 	default:
-	  kprintf("Unknown syscall %d\n", callno);
-	  err = ENOSYS;
-	  break;
+		kprintf("Unknown syscall %d\n", callno);
+		err = ENOSYS;
+		break;
 	}
 
 
@@ -201,28 +185,30 @@ syscall(struct trapframe *tf)
  * Thus, you can trash it and do things another way if you prefer.
  */
 void
-enter_forked_process(void *data1, unsigned long data2)
+enter_forked_process(struct trapframe *tf)
 {
-  struct trapframe *otf = data1;
-  struct trapframe tf = *otf;
+#if OPT_A2
+	//Simulate a return from syscall back to user mode
+	//Most code came from syscall.c after handling the syscall
 
-  (void) data2;
-  
-  tf.tf_v0 = 0;
-  tf.tf_a3 = 0;
+	//v0 contains the return value (0 in the child process)
+	tf->tf_v0 = 0;
+	tf->tf_a3 = 0;
+	
+	/*
+	 * Now, advance the program counter, to avoid restarting
+	 * the syscall over and over again.
+	 */
+	tf->tf_epc += 4;
 
-  tf.tf_epc += 4;
+	/* Make sure the syscall code didn't forget to lower spl */
+	KASSERT(curthread->t_curspl == 0);
+	/* ...or leak any spinlocks */
+	KASSERT(curthread->t_iplhigh_count == 0);
 
-  kfree(otf);
-  KASSERT(curthread->t_curspl == 0);
-  KASSERT(curthread->t_iplhigh_count == 0);
-
-  mips_usermode(&tf);
-/*
- * void
- * enter_forked_process(struct trapframe *tf)
- * {
- *	(void)tf;
- * }
- * */
+	//Use the tf to return to user mode
+	mips_usermode(tf);
+#else
+	(void)tf;
+#endif // OPT_A2
 }
