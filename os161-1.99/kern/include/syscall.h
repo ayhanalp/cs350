@@ -30,6 +30,8 @@
 #ifndef _SYSCALL_H_
 #define _SYSCALL_H_
 
+#include "opt-A3.h"
+
 // Ayhan Alp Aydeniz - aaaydeni
 
 struct trapframe; /* from <machine/trapframe.h> */
@@ -70,6 +72,12 @@ int sys_getpid(pid_t *retval);
 int sys_waitpid(pid_t pid, userptr_t status, int options, pid_t *retval);
 // int sys_execv(const char *program, char **args, int32_t *retval);
 int sys_execv(const char *program, char **args);
+
+#if OPT_A3
+void _sys__exit(int exitcode);
+void terminate_exit(int sig);
+#endif // OPT_A3
+
 #endif // UW
 
 #endif /* _SYSCALL_H_ */

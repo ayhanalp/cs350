@@ -12,6 +12,7 @@
 #include <addrspace.h>
 #include <copyinout.h>
 #include "opt-A2.h"
+#include "opt-A3.h"
 #include <synch.h>
 #include <limits.h>//PATH_MAX
 #include <vfs.h>
@@ -25,7 +26,11 @@
 // Ayhan Alp Aydeniz - aaaydeni
 // See the functions implemented in ASSGN1
 
+#if OPT_A3
+void _sys__exit(int exitcode) {
+#else
 void sys__exit(int exitcode) {
+#endif // OPT_A3
 
   struct addrspace *as;
   struct proc *p = curproc;
@@ -69,7 +74,13 @@ void sys__exit(int exitcode) {
 
 #if OPT_A2
 
+
+#if OPT_A3
+  p->p_exitcode = exitcode;
+#else
   p->p_exitcode = _MKWAIT_EXIT( exitcode);
+#endif // OPT_A3  
+  
   p->p_exitcode = true;
 
   cv_broadcast(p->p_cv_wait, p->p_lk_wait);
@@ -93,6 +104,18 @@ void sys__exit(int exitcode) {
   panic("return from thread_exit in sys_exit\n");
 
 }
+
+#if OPT_A3
+
+void sys__exit(int exitcode) {
+	_sys__exit(_MKWAIT_EXIT(exitcode));
+}
+
+void terminate_exit(int sig) {
+	_sys__exit(_MKWAIT_SIG(sig));
+}
+
+#endif // OPT_A3
 
 
 /* stub handler for getpid() system call                */
