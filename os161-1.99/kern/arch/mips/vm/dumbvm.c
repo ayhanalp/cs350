@@ -27,6 +27,8 @@
  * SUCH DAMAGE.
  */
 
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #include <types.h>
 #include <kern/errno.h>
 #include <lib.h>
@@ -38,6 +40,7 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <syscall.h>
+#include "opt-A3.h"
 
 /*
  * Dumb MIPS-only "VM system" that is intended to only be just barely
@@ -55,165 +58,188 @@
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
 #if OPT_A3
-static uint32_t *frame_size;
-static uint32_t *frame_use;
-static paddr_t mem_start;
-static paddr_t mem_end;
-static int frame_max;
-static int frame_first_free;
-static bool vm_ready = false;
-#endif // OPT_A3
+
+static int frm_1st_free;
+static bool isVMready = false;
+static paddr_t mem_start_addr;
+static paddr_t mem_end_addr;
+static uint32_t *frm_sz;
+static uint32_t *frm_used;
+static int frm_max;
+
+#endif // Optional for ASSGN3
 
 void
 vm_bootstrap(void)
 {
 #if OPT_A3
-	//Grab all memory from ram
-	ram_getsize(&mem_start, &mem_end);
 
-	//Max mem is less than 512MB = 131072 frames
-	//131072 frames at 1 bit each = 16384 bytes = 4 frames
+	ram_getsize(&mem_start_addr, &mem_end_addr);
 
-	//Dedicate 4 frames to hold frame_use bitfield
-	frame_use = (uint32_t *) PADDR_TO_KVADDR(mem_start);
-	mem_start += sizeof(uint32_t) * PAGE_SIZE;
+	frm_used = (uint32_t *) PADDR_TO_KVADDR(mem_start_addr);
+	mem_start_addr = mem_start_addr + sizeof(uint32_t) * PAGE_SIZE;
 
-	//Calculate number of frames we can fit into
-	//Each page takes PAGE_SIZE + 4 bytes(frame-size)
-	frame_max = (mem_end - mem_start) / (PAGE_SIZE + 4);
+	frm_max = (mem_end_addr - mem_start_addr) / (PAGE_SIZE + 4);
 
-	//Dedicate an array of integers to save continuous frame sizes
-	mem_end -= sizeof(uint32_t) * frame_max;
-	frame_size = (uint32_t *) PADDR_TO_KVADDR(mem_end);
+	mem_end_addr = mem_end_addr - sizeof(uint32_t) * frm_max;
+	frm_sz = (uint32_t *) PADDR_TO_KVADDR(mem_end_addr);
 
-	//Mark first free frame
-	frame_first_free = 0;
 
-	//Clear bitfield and size arrays
-	for(int i = 0; i < frame_max/32; i++) {
-		frame_use[i] = 0;
-	}
-	for(int i = 0; i < frame_max; i++) {
-		frame_size[i] = 0;
+	frm_1st_free = 0;
+
+
+	for (int ii = 0; ii < frm_max / 32; ii++)
+	{
+		frm_used[ii] = 0;
 	}
 
-	kprintf("vm: %d frames available \n", frame_max);
-	vm_ready = true;
-#else
-	/* Do nothing. */
-#endif // OPT_A3
+	for (int ii = 0; ii < frm_max; ii++)
+	{
+		frm_sz[ii] = 0;
+	}
+
+	kprintf("vm: %d frames available \n", frm_max);
+	isVMready = true;
+
+#endif // Optional for ASSGN3
 }
 
 #if OPT_A3
 
 static
 bool
-frame_get_use(int frame_number)
+frm_get_used(int frm_num)
 {
-	KASSERT(frame_number < frame_max);
-	int index = frame_number / 32;
-	uint32_t mask = ((uint32_t)1) << (frame_number%32);
-	return (frame_use[index] & mask) != 0;
+	KASSERT(frm_num < frm_max);
+	int indX = frm_num / 32;
+	uint32_t msk = ((uint32_t) 1) << (frm_num % 32);
+	
+	return (frm_used[indX] & msk) != 0;
 }
 
 static
 void
-frame_set_use(int frame_number, bool use)
+frm_set_used(int frm_num, bool isUsed)
 {
-	KASSERT(frame_number < frame_max);
-	int index = frame_number / 32;
-	uint32_t mask = ((uint32_t)1) << (frame_number%32);
+	KASSERT(frm_num < frm_max);
+	int indX = frm_num / 32;
+	uint32_t msk = ((uint32_t) 1) << (frm_num % 32);
 
-	if(use) {
-		frame_use[index] |= mask;
+	if (isUsed == 1)
+	{
+		frm_used[indX] = frm_used[indX] | msk;
 	}
-	else {
-		frame_use[index] &= ~mask;
+
+	else
+	{
+		frm_used[indX] = frm_used[indX] &  ~msk;
 	}
 }
 
 static
 paddr_t
-alloc_frames(int npages)
+allocate_frms(int num_pages)
 {
-	int frame_number;
+	int frm_num;
 
 	spinlock_acquire(&stealmem_lock);
 
-	//Start with first free
-	frame_number = frame_first_free;
+	frm_num = frm_1st_free;
 
-	//Look until we find a first spot
-	while(frame_number < frame_max) {
-		if(!frame_get_use(frame_number)) {
-			//Found a free spot
-			//Check if there is enough continuous space
-			bool enough_frames = true;
-			for(int i = 1; i < npages; i++) {
-				if(frame_get_use(frame_number + i)) {
-					enough_frames = false;
-					//Advance our frame number to the next unchecked frame
-					frame_number += i + 1;
-					break;
-				}
-			}
-			//Enough space found. Use it!
-			if(enough_frames) {
-				//First mark all the frames used
-				for(int i = 0; i < npages; i++) {
-					frame_set_use(frame_number + i, true);
-					frame_size[frame_number + i] = 0;
-				}
-				//Mark the size of the frames
-				frame_size[frame_number] = npages;
-				//Update the first frame if necessary
-				if(frame_number == frame_first_free) {
-					for(int i = frame_number + 1; i < frame_max; i++) {
-						if(!frame_get_use(i)) {
-							frame_first_free = i;
-							break;
-						}
+	while (1)
+	{
+		if (frm_num < frm_max)
+		{
+			if (frm_get_used(frm_num) == 0)
+			{
+			
+				bool yeter = true;
+			
+				for (int ii = 1; ii < num_pages; ii++)
+				{
+					if (frm_get_used(frm_num + ii))
+					{
+						yeter = false;
+					
+						frm_num = frm_num + (ii + 1);
+
+						break;
 					}
 				}
-				spinlock_release(&stealmem_lock);
-				return mem_start + (frame_number * PAGE_SIZE);
+			
+				if (yeter == 1)
+				{
+					for (int ii = 0; ii < num_pages; ii++)
+					{
+						frm_set_used(frm_num + ii, true);
+						frm_sz[frm_num + ii] = 0;
+					}
+				
+					frm_sz[frm_num] = num_pages;
+				
+					if (frm_num == frm_1st_free)
+					{
+						for (int ii = frm_num + 1; ii < frm_max; ii++)
+						{
+							if (frm_get_used(ii) == 0)
+							{
+								frm_1st_free = ii;
+								
+								break;
+							}
+						}
+					}
+					
+					spinlock_release(&stealmem_lock);
+				
+					return mem_start_addr + (frm_num * PAGE_SIZE);
+				}
+			}
+
+			else
+			{
+				frm_num = frm_num + 1;
 			}
 		}
-		else {
-			frame_number++;
+		
+		else
+		{
+			break;
 		}
 	}
 
-	//Arriving here means no space available
 	spinlock_release(&stealmem_lock);
+
 	return 0;
 }
 
 static
 void
-free_frames(paddr_t frame)
+freeFrms(paddr_t frm)
 {
-	int frame_number = (frame - mem_start) / PAGE_SIZE;
-	int npages;
+	int frm_num = (frm - mem_start_addr) / PAGE_SIZE;
+	
+	int num_pages;
 
-	KASSERT((frame - mem_start) % PAGE_SIZE == 0);
-	KASSERT(frame_number >= 0);
-	KASSERT(frame_number < frame_max);
-	KASSERT(frame_get_use(frame_number));
+	KASSERT(frm_num >= 0);
+	KASSERT((frm - mem_start_addr) % PAGE_SIZE == 0);
+	
+	KASSERT(frm_num < frm_max);
+	KASSERT(frm_get_used(frm_num));
 
 	spinlock_acquire(&stealmem_lock);
 
-	npages = frame_size[frame_number];
+	num_pages = frm_sz[frm_num];
 
-	//Mark all the frames as free
-	for(int i = 0; i < npages; i++) {
-		frame_set_use(frame_number + i, false);
-		frame_size[frame_number + i] = 0;
+	for (int ii = 0; ii < num_pages; ii++)
+	{
+		frm_set_used(frm_num + ii, false);
+		frm_sz[frm_num + ii] = 0;
 	}
 
-	//Update the first frame if necessary
-	if(frame_number < frame_first_free) {
-		frame_first_free = frame_number;
+	if (frm_num < frm_1st_free)
+	{
+		frm_1st_free = frm_num;
 	}
 
 	spinlock_release(&stealmem_lock);
@@ -221,39 +247,44 @@ free_frames(paddr_t frame)
 
 static
 void
-free_multi_frames(paddr_t * pframes, int npages)
+freeMultiFrms(paddr_t * p_frms, int num_pages)
 {
-	for(int i = 0; i < npages; i++) {
-		free_frames(pframes[i]);
+	for (int ii = 0; ii < num_pages; ii++)
+	{
+		freeFrms(p_frms[ii]);
 	}
-	kfree(pframes);
+
+	kfree(p_frms);
 }
 
-//WARNING: UNSAFE
-//Uses kmalloc, and thus may cause infinite recursion if inappropriately used
 static
 paddr_t *
-alloc_multi_frames(int npages)
+allocate_mlt_frms(int num_pages)
 {
-	paddr_t *result;
+	paddr_t *res;
 
-	result = kmalloc(npages * sizeof(paddr_t *));
-	if(result == NULL) {
+	res = kmalloc(num_pages * sizeof(paddr_t *));
+	
+	if (NULL == res)
+	{
 		return 0;
 	}
 
-	for(int i = 0; i < npages; i++) {
-		result[i] = alloc_frames(1);
-		if(result[i] == 0) {
-			free_multi_frames(result, i);
+	for (int ii = 0; ii < num_pages; ii++)
+	{
+		res[ii] = allocate_frms(1);
+		if (res[ii] == 0)
+		{
+			freeMultiFrms(res, ii);
+			
 			return 0;
 		}
 	}
 
-	return result;
+	return res;
 }
 
-#endif // OPT_A3
+#endif // Optional for ASSGN3
 
 static
 paddr_t
@@ -274,32 +305,39 @@ vaddr_t
 alloc_kpages(int npages)
 {
 	paddr_t pa;
+
 #if OPT_A3
-	if(vm_ready) {
-		pa = alloc_frames(npages);
+
+	if (isVMready) {
+		pa = allocate_frms(npages);
 	}
 	else {
 		pa = getppages(npages);
 	}
+
 #else
+
 	pa = getppages(npages);
-#endif // OPT_A3
-	if (pa==0) {
+
+#endif // Optional for ASSGN3
+	
+	if (pa == 0)
+	{
 		return 0;
 	}
+
 	return PADDR_TO_KVADDR(pa);
 }
 
 void 
 free_kpages(vaddr_t addr)
 {
-#if OPT_A3
-	free_frames(KVADDR_TO_PADDR(addr));
-#else
-	/* nothing - leak the memory. */
 
-	(void)addr;
-#endif // OPT_A3
+#if OPT_A3
+	
+	freeFrms(KVADDR_TO_PADDR(addr));
+
+#endif // Optional for ASSGN3
 }
 
 void
@@ -320,13 +358,16 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 {
 	vaddr_t vbase1, vtop1, vbase2, vtop2, stackbase, stacktop;
 	paddr_t paddr;
-	int i;
+	
 	uint32_t ehi, elo;
 	struct addrspace *as;
 	int spl;
+
 #if OPT_A3
-	uint32_t rw;
-#endif // OPT_A3
+	
+	uint32_t re_wr;
+
+#endif // Optional for ASSGN3
 
 	faultaddress &= PAGE_FRAME;
 
@@ -335,11 +376,17 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	switch (faulttype) {
 	    case VM_FAULT_READONLY:
 #if OPT_A3
-		return EFAULT;
+
+    		    return EFAULT;
+
 #else
-		/* We always create pages read-write, so we can't get this */
-		panic("dumbvm: got VM_FAULT_READONLY\n");
-#endif // OPT_A3
+
+    		    /* We always create pages read-write, so we can't get this */
+
+    		    panic("dumbvm: got VM_FAULT_READONLY\n");
+
+#endif // Optional for ASSGN3
+
 	    case VM_FAULT_READ:
 	    case VM_FAULT_WRITE:
 		break;
@@ -347,7 +394,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		return EINVAL;
 	}
 
-	if (curproc == NULL) {
+	if (NULL == curproc)
+	{
 		/*
 		 * No process. This is probably a kernel fault early
 		 * in boot. Return EFAULT so as to panic instead of
@@ -367,24 +415,35 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 	/* Assert that the address space has been set up properly. */
 #if OPT_A3
+	
 	KASSERT(as->as_vbase1 != 0);
-	KASSERT(as->as_pbase1 != NULL);
+	KASSERT(NULL != as->as_pbase1);
 	KASSERT(as->as_npages1 != 0);
+	
 	KASSERT(as->as_vbase2 != 0);
-	KASSERT(as->as_pbase2 != NULL);
+	KASSERT(NULL != as->as_pbase2);
 	KASSERT(as->as_npages2 != 0);
+	
 	KASSERT(as->as_stackpbase != NULL);
 	KASSERT((as->as_vbase1 & PAGE_FRAME) == as->as_vbase1);
-	for(int i = 0; i < (int)as->as_npages1; i++) {
-		KASSERT((as->as_pbase1[i] & PAGE_FRAME) == as->as_pbase1[i]);
+	
+	for (int ii = 0; ii < (int) as->as_npages1; ii++)
+	{
+		KASSERT((as->as_pbase1[ii] & PAGE_FRAME) == as->as_pbase1[ii]);
 	}
+	
 	KASSERT((as->as_vbase2 & PAGE_FRAME) == as->as_vbase2);
-	for(int i = 0; i < (int)as->as_npages2; i++) {
-		KASSERT((as->as_pbase2[i] & PAGE_FRAME) == as->as_pbase2[i]);
+	
+	for (int ii = 0; ii < (int) as->as_npages2; ii++)
+	{
+		KASSERT((as->as_pbase2[ii] & PAGE_FRAME) == as->as_pbase2[ii]);
 	}
-	for(int i = 0; i < DUMBVM_STACKPAGES; i++) {
-		KASSERT((as->as_stackpbase[i] & PAGE_FRAME) == as->as_stackpbase[i]);
+	
+	for (int ii = 0; ii < DUMBVM_STACKPAGES; ii++)
+	{
+		KASSERT((as->as_stackpbase[ii] & PAGE_FRAME) == as->as_stackpbase[ii]);
 	}
+
 #else
 	KASSERT(as->as_vbase1 != 0);
 	KASSERT(as->as_pbase1 != 0);
@@ -398,7 +457,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	KASSERT((as->as_vbase2 & PAGE_FRAME) == as->as_vbase2);
 	KASSERT((as->as_pbase2 & PAGE_FRAME) == as->as_pbase2);
 	KASSERT((as->as_stackpbase & PAGE_FRAME) == as->as_stackpbase);
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 
 	vbase1 = as->as_vbase1;
 	vtop1 = vbase1 + as->as_npages1 * PAGE_SIZE;
@@ -407,34 +467,62 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	stackbase = USERSTACK - DUMBVM_STACKPAGES * PAGE_SIZE;
 	stacktop = USERSTACK;
 
-	if (faultaddress >= vbase1 && faultaddress < vtop1) {
+	if (faultaddress >= vbase1 && faultaddress < vtop1)
+	{
+
 #if OPT_A3
-		rw = 0;
-		int frame = (faultaddress - vbase1) / PAGE_SIZE;
-		paddr = as->as_pbase1[frame];
+
+		re_wr = 0;
+		
+		int frm = (faultaddress - vbase1) / PAGE_SIZE;
+		
+		paddr = as->as_pbase1[frm];
+
 #else
+
 		paddr = (faultaddress - vbase1) + as->as_pbase1;
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
+	
 	}
-	else if (faultaddress >= vbase2 && faultaddress < vtop2) {
+	else if (faultaddress >= vbase2 && faultaddress < vtop2)
+	{
+
 #if OPT_A3
-		rw = TLBLO_DIRTY;
-		int frame = (faultaddress - vbase2) / PAGE_SIZE;
-		paddr = as->as_pbase2[frame];
+
+		re_wr = TLBLO_DIRTY;
+		
+		int frm = (faultaddress - vbase2) / PAGE_SIZE;
+		
+		paddr = as->as_pbase2[frm];
+
 #else
+
 		paddr = (faultaddress - vbase2) + as->as_pbase2;
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
+	
 	}
-	else if (faultaddress >= stackbase && faultaddress < stacktop) {
+
+	else if (faultaddress >= stackbase && faultaddress < stacktop)
+	{
+
 #if OPT_A3
-		rw = TLBLO_DIRTY;
-		int frame = (faultaddress - stackbase) / PAGE_SIZE;
-		paddr = as->as_stackpbase[frame];
+		re_wr = TLBLO_DIRTY;
+		
+		int frm = (faultaddress - stackbase) / PAGE_SIZE;
+		
+		paddr = as->as_stackpbase[frm];
+
 #else
 		paddr = (faultaddress - stackbase) + as->as_stackpbase;
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
+	
 	}
-	else {
+	
+	else 
+	{
 		return EFAULT;
 	}
 
@@ -442,45 +530,59 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	KASSERT((paddr & PAGE_FRAME) == paddr);
 
 #if OPT_A3
-	//Disable rw-checks during address space initialization
-	if(as->init) {
-		rw = TLBLO_DIRTY;
+	
+	if (as->init == 1)
+	{
+		re_wr = TLBLO_DIRTY;
 	}
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
 
-	for (i=0; i<NUM_TLB; i++) {
-		tlb_read(&ehi, &elo, i);
-		if (elo & TLBLO_VALID) {
+	for (int ii = 0; ii < NUM_TLB; ii++)
+	{
+		tlb_read(&ehi, &elo, ii);
+		if (elo & TLBLO_VALID)
+		{
 			continue;
 		}
+		
 		ehi = faultaddress;
+
 #if OPT_A3
-		elo = paddr | rw | TLBLO_VALID;
+
+		elo = paddr | re_wr | TLBLO_VALID;
+
 #else
+
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
+
 		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
-		tlb_write(ehi, elo, i);
+		tlb_write(ehi, elo, ii);
 		splx(spl);
 		return 0;
 	}
 
 #if OPT_A3
-	//Instead of dying, we'll now overwrite the TLB of an entry
+
 	ehi = faultaddress;
-	elo = paddr | rw | TLBLO_VALID;
+	elo = paddr | re_wr | TLBLO_VALID;
 	DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 	tlb_random(ehi, elo);
 	splx(spl);
 	return 0;
+
 #else
+
 	kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
 	return EFAULT;
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 }
 
 struct addrspace *
@@ -492,14 +594,18 @@ as_create(void)
 	}
 
 #if OPT_A3
+
+	as->as_stackpbase = NULL;
+        as->init = false;
+
 	as->as_vbase1 = 0;
 	as->as_pbase1 = NULL;
 	as->as_npages1 = 0;
+	
 	as->as_vbase2 = 0;
 	as->as_pbase2 = NULL;
 	as->as_npages2 = 0;
-	as->as_stackpbase = NULL;
-	as->init = false;
+
 #else
 	as->as_vbase1 = 0;
 	as->as_pbase1 = 0;
@@ -508,7 +614,8 @@ as_create(void)
 	as->as_pbase2 = 0;
 	as->as_npages2 = 0;
 	as->as_stackpbase = 0;
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 
 	return as;
 }
@@ -516,11 +623,15 @@ as_create(void)
 void
 as_destroy(struct addrspace *as)
 {
+
 #if OPT_A3
-	free_multi_frames(as->as_pbase1, as->as_npages1);
-	free_multi_frames(as->as_pbase2, as->as_npages2);
-	free_multi_frames(as->as_stackpbase, DUMBVM_STACKPAGES);
-#endif // OPT_A3
+
+	freeMultiFrms(as->as_pbase1, as->as_npages1);
+	freeMultiFrms(as->as_pbase2, as->as_npages2);
+	freeMultiFrms(as->as_stackpbase, DUMBVM_STACKPAGES);
+
+#endif // Optional for ASSGN3
+
 	kfree(as);
 }
 
@@ -551,18 +662,22 @@ as_activate(void)
 void
 as_deactivate(void)
 {
-	/* nothing */
-#if OPT_A3
-	int i, spl;
-	/* Disable interrupts on this CPU while frobbing the TLB. */
-	spl = splhigh();
+/* nothing */
 
-	for (i=0; i<NUM_TLB; i++) {
-		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+#if OPT_A3
+
+	int SPL;
+
+	SPL = splhigh();
+
+	for (int ii = 0; ii < NUM_TLB; ii++)
+	{
+		tlb_write(TLBHI_INVALID(ii), TLBLO_INVALID(), ii);
 	}
 
-	splx(spl);
-#endif // OPT_A3
+	splx(SPL);
+
+#endif // Optional for ASSGN3
 }
 
 int
@@ -605,50 +720,61 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 }
 
 #if OPT_A3
+
 static
 void
 as_zero_region(paddr_t *paddr, unsigned npages)
 {
-	for(int i = 0; i < (int) npages; i++) {
-		bzero((void *)PADDR_TO_KVADDR(paddr[i]), PAGE_SIZE);
+	for(int ii = 0; ii < (int) npages; ii++) {
+		bzero((void *)PADDR_TO_KVADDR(paddr[ii]), PAGE_SIZE);
 	}
 }
+
 #else
+
 static
 void
 as_zero_region(paddr_t paddr, unsigned npages)
 {
 	bzero((void *)PADDR_TO_KVADDR(paddr), npages * PAGE_SIZE);
 }
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 
 int
 as_prepare_load(struct addrspace *as)
 {
 #if OPT_A3
+
 	KASSERT(as->as_pbase1 == NULL);
+
 	KASSERT(as->as_pbase2 == NULL);
+
 	KASSERT(as->as_stackpbase == NULL);
 
-	as->as_pbase1 = alloc_multi_frames(as->as_npages1);
-	if (as->as_pbase1 == NULL) {
+	as->as_pbase1 = allocate_mlt_frms(as->as_npages1);
+	if (NULL == as->as_pbase1)
+	{
 		return ENOMEM;
 	}
 
-	as->as_pbase2 = alloc_multi_frames(as->as_npages2);
-	if (as->as_pbase2 == 0) {
-		free_multi_frames(as->as_pbase1, as->as_npages1);
+	as->as_pbase2 = allocate_mlt_frms(as->as_npages2);
+	if (as->as_pbase2 == 0)
+	{
+		freeMultiFrms(as->as_pbase1, as->as_npages1);
 		return ENOMEM;
 	}
 
-	as->as_stackpbase = alloc_multi_frames(DUMBVM_STACKPAGES);
-	if (as->as_stackpbase == 0) {
-		free_multi_frames(as->as_pbase1, as->as_npages1);
-		free_multi_frames(as->as_pbase2, as->as_npages2);
+	as->as_stackpbase = allocate_mlt_frms(DUMBVM_STACKPAGES);
+	if (as->as_stackpbase == 0)
+	{
+		freeMultiFrms(as->as_pbase1, as->as_npages1);
+		freeMultiFrms(as->as_pbase2, as->as_npages2);
 		return ENOMEM;
 	}
 
 	as->init = true;
+
 #else
 	KASSERT(as->as_pbase1 == 0);
 	KASSERT(as->as_pbase2 == 0);
@@ -668,7 +794,8 @@ as_prepare_load(struct addrspace *as)
 	if (as->as_stackpbase == 0) {
 		return ENOMEM;
 	}
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 	
 	as_zero_region(as->as_pbase1, as->as_npages1);
 	as_zero_region(as->as_pbase2, as->as_npages2);
@@ -681,10 +808,11 @@ int
 as_complete_load(struct addrspace *as)
 {
 #if OPT_A3
+
 	as->init = false;
-#else
-	(void)as;
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
+	
 	return 0;
 }
 
@@ -719,30 +847,38 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	}
 
 #if OPT_A3
+
 	KASSERT(new->as_pbase1 != NULL);
+	
 	KASSERT(new->as_pbase2 != NULL);
+	
 	KASSERT(new->as_stackpbase != NULL);
 
-	for(int i = 0; i < (int)old->as_npages1; i++) {
-		memmove((void *)PADDR_TO_KVADDR(new->as_pbase1[i]),
-			(const void *)PADDR_TO_KVADDR(old->as_pbase1[i]),
+	for (int ii = 0; ii < (int)old->as_npages1; ii++)
+	{
+		memmove((void *)PADDR_TO_KVADDR(new->as_pbase1[ii]),
+			(const void *)PADDR_TO_KVADDR(old->as_pbase1[ii]),
 			PAGE_SIZE);
 	}
 
-	for(int i = 0; i < (int)old->as_npages2; i++) {
-		memmove((void *)PADDR_TO_KVADDR(new->as_pbase2[i]),
-			(const void *)PADDR_TO_KVADDR(old->as_pbase2[i]),
+	for (int ii = 0; ii < (int)old->as_npages2; ii++)
+	{
+		memmove((void *)PADDR_TO_KVADDR(new->as_pbase2[ii]),
+			(const void *)PADDR_TO_KVADDR(old->as_pbase2[ii]),
 			PAGE_SIZE);
 	}
 
-	for(int i = 0; i < DUMBVM_STACKPAGES; i++) {
-		memmove((void *)PADDR_TO_KVADDR(new->as_stackpbase[i]),
-			(const void *)PADDR_TO_KVADDR(old->as_stackpbase[i]),
+	for(int ii = 0; ii < DUMBVM_STACKPAGES; ii++)
+	{
+		memmove((void *)PADDR_TO_KVADDR(new->as_stackpbase[ii]),
+			(const void *)PADDR_TO_KVADDR(old->as_stackpbase[ii]),
 			PAGE_SIZE);
 	}
 
 	as_complete_load(new);
+
 #else
+
 	KASSERT(new->as_pbase1 != 0);
 	KASSERT(new->as_pbase2 != 0);
 	KASSERT(new->as_stackpbase != 0);
@@ -758,7 +894,8 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	memmove((void *)PADDR_TO_KVADDR(new->as_stackpbase),
 		(const void *)PADDR_TO_KVADDR(old->as_stackpbase),
 		DUMBVM_STACKPAGES*PAGE_SIZE);
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 	
 	*ret = new;
 	return 0;

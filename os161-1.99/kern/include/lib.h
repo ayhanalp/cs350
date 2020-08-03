@@ -57,6 +57,9 @@
  * testing there doesn't seem much point; one can just edit this file
  * temporarily instead.
  */
+
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #include "opt-noasserts.h"
 
 #if OPT_NOASSERTS
@@ -89,6 +92,7 @@
 #define DB_NETFS       0x0400
 #define DB_KMALLOC     0x0800
 #define DB_SYNCPROB    0x1000
+
 #define DB_PROCSYS     0x2000
 
 extern uint32_t dbflags;

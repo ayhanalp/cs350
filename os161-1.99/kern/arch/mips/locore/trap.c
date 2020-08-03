@@ -28,6 +28,8 @@
  * SUCH DAMAGE.
  */
 
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #include <types.h>
 #include <signal.h>
 #include <lib.h>
@@ -69,8 +71,9 @@ static const char *const trapcodenames[NTRAPCODES] = {
 };
 
 #if OPT_A3
+
 /* Names for signal codes */
-#define NSIGCODES 32
+/*#define NSIGCODES 32
 static const char *const signalnames[NSIGCODES] = {
 	"Hangup",
 	"Interrupt (^C)",
@@ -81,7 +84,7 @@ static const char *const signalnames[NSIGCODES] = {
 	"Emulator trap",
 	"Floating point exception",
 	"Hard kill (unblockable)",
-	"Bus error, typically bad pointer alignmen",
+	"Bus error, typically bad pointer alignment",
 	"Segmentation fault",
 	"Bad system call",
 	"Broken pipe",
@@ -104,8 +107,10 @@ static const char *const signalnames[NSIGCODES] = {
 	"Application-defined",
 	"Application-defined",
 	"Power failure",
-};
-#endif // OPT_A3
+};*/
+
+#endif // Optional for ASSGN3
+
 
 /*
  * Function called when user-level code hits a fatal fault.
@@ -150,20 +155,24 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	}
 
 #if OPT_A3
-	kprintf("Fatal user mode operation. %s (epc 0x%x, vaddr 0x%x)\n",
+	/*kprintf("Fatal user mode operation. %s (epc 0x%x, vaddr 0x%x)\n",
 		signalnames[sig-1], epc, vaddr);
+	*/
+	terminate_kill_exit(sig);
 
-	terminate_exit(sig);
-#else
+#endif // Optional for ASSGN3
 
+// #else
 	/*
 	 * You will probably want to change this.
 	 */
 
-	kprintf("Fatal user mode trap %u sig %d (%s, epc 0x%x, vaddr 0x%x)\n",
-		code, sig, trapcodenames[code], epc, vaddr);
-	panic("I don't know how to handle this\n");
-#endif // OPT_A3
+	 kprintf("Fatal user mode trap %u sig %d (%s, epc 0x%x, vaddr 0x%x)\n",
+	 	code, sig, trapcodenames[code], epc, vaddr);
+	 panic("I don't know how to handle this\n");
+       	 
+
+// #endif // Optional for ASSGN3
 }
 
 /*
@@ -171,6 +180,7 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
  * This is called by the assembly-language exception handler once
  * the trapframe has been set up.
  */
+
 void
 mips_trap(struct trapframe *tf)
 {

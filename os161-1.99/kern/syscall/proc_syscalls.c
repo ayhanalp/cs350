@@ -1,3 +1,5 @@
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #include <types.h>
 #include <kern/errno.h>
 #include <kern/unistd.h>
@@ -16,10 +18,14 @@
 	/* this needs to be fixed to get exit() and waitpid() working properly */
 
 #if OPT_A3
+
 void _sys__exit(int exitcode) {
+
 #else
+
 void sys__exit(int exitcode) {
-#endif // OPT_A3
+
+#endif // Optional for ASSGN3
 
 	struct addrspace *as;
 	struct proc *p = curproc;
@@ -42,6 +48,7 @@ void sys__exit(int exitcode) {
 	as_destroy(as);
 
 #if OPT_A2
+
 	DEBUG(DB_PROCSYS, "Syscall: _exit (Code %d)\n",exitcode);
 	KASSERT(curproc->p_data != NULL);
 
@@ -50,46 +57,51 @@ void sys__exit(int exitcode) {
 	procdata_t *p_data = curproc->p_data;
 
 	DEBUG(DB_PROCSYS, "Free PID (%d)\n", p_data->p_pid);
-	//Free process id
+	
 	pid_use[p_data->p_pid] = false;
 
 	procdata_t *child = p_data->p_firstchild;
-	while(child != NULL) {
+	
+	while (NULL != child)
+	{
 		procdata_t *next = child->p_nextsibling;
-		//Process exited, cleanup
-		if(child->p_exited) {
+		
+		if (child->p_exited == 1)
+		{
 			procdata_destroy(child);
 		}
-		//Process still alive, inform parent death
-		else {
+		
+		else
+		{
 			child->p_parent = NULL;
 		}
+		
 		child = next;
 	}
-	//Detach all children
+	
 	p_data->p_firstchild = NULL;
 
-	//If parent still alive
-	if(p_data->p_parent) {
-		//Save exitcode for parent processes
+	if (p_data->p_parent)
+       	{
+		
 #if OPT_A3
 		p_data->p_exit_code = exitcode;
 #else
 		p_data->p_exit_code = _MKWAIT_EXIT(exitcode);
-#endif // OPT_A3
+#endif // Optional for ASSGN3
 
-		//Signal process exit to waiting members
 		p_data->p_exited = true;
 		cv_broadcast(procdata_cv, procdata_lock);
 	}
-	//Parent exited
-	else {
+
+	else
+	{
 		procdata_destroy(p_data);
 		curproc->p_data = NULL;
 	}
 
 	lock_release(procdata_lock);
-#endif // OPT_A2
+#endif // Optional for ASSGN2
 
 	/* detach this thread from its process */
 	/* note: curproc cannot be used after this call */
@@ -110,17 +122,19 @@ void sys__exit(int exitcode) {
 	_sys__exit(_MKWAIT_EXIT(exitcode));
 }
 
-void terminate_exit(int sig) {
+void terminate_kill_exit(int sig) {
 	_sys__exit(_MKWAIT_SIG(sig));
 }
 
-#endif // OPT_A3
+#endif // Optional for ASSGN3
 
 /* stub handler for getpid() system call                */
 int
 sys_getpid(pid_t *retval)
 {
+
 #if OPT_A2
+
 	DEBUG(DB_PROCSYS, "Syscall: getpid\n");
 	KASSERT(curproc->p_data != NULL);
 	lock_acquire(procdata_lock);
@@ -128,10 +142,12 @@ sys_getpid(pid_t *retval)
 	*retval = curproc->p_data->p_pid;
 	lock_release(procdata_lock);
 #else
+
 	/* for now, this is just a stub that always returns a PID of 1 */
 	/* you need to fix this to make it work properly */
 	*retval = 1;
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
 	return(0);
 }
 
@@ -149,40 +165,48 @@ sys_waitpid(pid_t pid,
 #if OPT_A2
 	DEBUG(DB_PROCSYS, "Syscall: waitpid(%d)\n",pid);
 
-	if (options != 0) {
+	if (options != 0)
+	{
 		return(EINVAL);
 	}
 
-	//Validate pid
-	if(pid < 0 || pid > PID_MAX) {
+	if (pid < 0 || pid > PID_MAX)
+	{
 		DEBUG(DB_PROCSYS, "Invalid PID\n");
 		return ESRCH;
 	}
 
 	lock_acquire(procdata_lock);
 
-	//First, check if it's a child
 	procdata_t *child = curproc->p_data->p_firstchild;
-	while(child != NULL) {
-		if(child->p_pid == pid) {
+
+	while (NULL != child)
+	{
+		if (child->p_pid == pid)
+		{
 			break;
 		}
+		
 		child = child->p_nextsibling;
 	}
-	//Child not found
-	if(child == NULL || child->p_pid != pid) {
-		if(pid_use[pid]) {
+	
+	if (NULL == child || child->p_pid != pid)
+	{
+		if (pid_use[pid])
+		{
 			lock_release(procdata_lock);
 			return ECHILD;
 		}
-		else {
+		else
+		{
 			lock_release(procdata_lock);
+		
 			return ESRCH;
 		}
 	}
 
-	//Check if the child has exited. If not wait.
-	while(!child->p_exited) {
+	while (child->p_exited == 0)
+       	{
 		cv_wait(procdata_cv, procdata_lock);
 	}
 
@@ -204,7 +228,8 @@ sys_waitpid(pid_t pid,
 	}
 	/* for now, just pretend the exitstatus is 0 */
 	exitstatus = 0;
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
 
 	result = copyout((void *)&exitstatus,status,sizeof(int));
 	if (result) {
@@ -220,13 +245,13 @@ int
 sys_fork(pid_t *retval, struct trapframe *tf)
 {
 	DEBUG(DB_PROCSYS, "Syscall: fork\n");
-	//Try to assign a PID
+
 	lock_acquire(procdata_lock);
 
 	int pid = procdata_find_free_pid(curproc->p_data);
 
-	//No PID available
-	if(pid < 0) {
+	if (pid < 0)
+	{
 		lock_release(procdata_lock);
 		DEBUG(DB_PROCSYS, "No PID Available\n");
 		*retval = -1;
@@ -239,50 +264,56 @@ sys_fork(pid_t *retval, struct trapframe *tf)
 
 	DEBUG(DB_PROCSYS, "New PID: %d\n", pid);
 
-	//Create proc structure
 	struct proc *proc = proc_create_runprogram2(curproc->p_name);
-	if(proc == NULL) {
+	if (NULL == proc)
+	{
 		lock_acquire(procdata_lock);
 		pid_use[pid] = false;
 		lock_release(procdata_lock);
 		*retval = -1;
+		
 		return ENOMEM;
 	}
 
-	//Create procdata structure
 	procdata_t *procdata = procdata_create(pid, curproc->p_data);
-	if(procdata == NULL) {
+	
+	if (NULL == procdata)
+	{
 		proc_destroy(proc);
 		lock_acquire(procdata_lock);
 		pid_use[pid] = false;
+
 		lock_release(procdata_lock);
 		*retval = -1;
+		
 		return ENOMEM;
 	}
+
 	proc->p_data = procdata;
 
-	//Clone the address space
 	struct addrspace *as = NULL;
 	as_copy(curproc->p_addrspace, &as);
-	if (as == NULL) {
+	
+	if (NULL == as)
+	{
 		proc_destroy(proc);
 		procdata_destroy(procdata);
 		lock_acquire(procdata_lock);
 		pid_use[pid] = false;
 		lock_release(procdata_lock);
 		*retval = -1;
+		
 		return ENOMEM;
 	}
 
 	proc->p_addrspace = as;
 
-	//Clone a trapframe for new thread
 	struct trapframe *tf_copy = kmalloc(sizeof(struct trapframe));
 	memcpy((void *)tf_copy, (const void*) tf, sizeof(struct trapframe));
 
-	//Fork the thread
 	int result = thread_fork(curthread->t_name, proc, sys_fork_new_process, tf_copy, 0);
-	if (result) {
+	if (result == 1)
+       	{
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		proc_destroy(proc);
 		procdata_destroy(procdata);
@@ -295,8 +326,8 @@ sys_fork(pid_t *retval, struct trapframe *tf)
 		return result;
 	}
 
-	//Return the pid
 	*retval = procdata->p_pid;
+
 	return 0;
 }
 
@@ -304,10 +335,9 @@ void
 sys_fork_new_process(void *ptr, unsigned long nargs)
 {
 	(void)nargs;
-	//Activate our address space
+	
 	as_activate();
 
-	//Fetch and copy the trapframe
 	struct trapframe tf;
 	struct trapframe *tf_copy = (struct trapframe *) ptr;
 	memcpy((void *)&tf, (const void*) tf_copy, sizeof(struct trapframe));
@@ -321,19 +351,18 @@ sys_execv(int *retval, userptr_t program, userptr_t args)
 {
 	int result;
 
-	//If we do return, an error must have occurred
 	*retval = -1;
 
-	//Copy arguments to kernel space first
 	int argc = 0;
 	char **argv = execv_copyin_args(program, args, &argc);
 
-	if(argv == NULL) {
+	if (NULL == argv)
+       	{
 		return E2BIG;
 	}
 	
 	result = runprogram(argc, argv, true);
-	//Should not return to here
+
 	runprogram_argv_destroy(argc, argv);
 	return result;
 }
@@ -341,55 +370,57 @@ sys_execv(int *retval, userptr_t program, userptr_t args)
 char **
 execv_copyin_args(userptr_t program, userptr_t args, int *argc_return)
 {
-	//Count argc
 	int argc = 1; //(Start with 1 for program)
 	char **args_ptr = (char **)args;
-	while(*args_ptr != NULL) {
+	while (NULL != *args_ptr) 
+	{
 		argc++;
 		args_ptr++;
 	}
 
-	//Try to allocate argv with argc+1 for the extra NULL pointer at the end
 	char **argv = kmalloc(sizeof(char *) * (argc + 1));
-	if(argv == NULL) {
+	if (NULL == argv)
+       	{
 		return NULL;
 	}
 
-	//Copy in program
 	argv[0] = kstrdup((const char*)program);
-	if(argv[0] == NULL) {
+
+	if (NULL == argv[0])
+       	{
 		kfree(argv);
+
 		return NULL;
 	}
 
-	//Zero pointers in case of error, including argv[argc]
-	for(int i = 1; i < argc + 1; i++) {
-		argv[i] = NULL;
+	for (int ii = 1; ii < argc + 1; ii++)
+       	{
+		argv[ii] = NULL;
 	}
 
-	//Copy in args
 	bool fail = false;
 	args_ptr = (char **)args;
-	for(int i = 1; i < argc; i++) {
-		argv[i] = kstrdup((const char*)args_ptr[i - 1]);
-		//Stop if failed
-		if(argv[i] == NULL) {
+
+	for (int ii = 1; ii < argc; ii++)
+       	{
+		argv[ii] = kstrdup((const char*) args_ptr[ii - 1]);
+		
+		if (NULL == argv[ii])
+	       	{
 			fail = true;
 			break;
 		}
 	}
-	if(fail) {
+	if (1 == fail)
+       	{
 		runprogram_argv_destroy(argc, argv);
 		return NULL;
 	}
 
-	//By now, argc and argv should be setup properly
-
-	//Store argc
 	*argc_return = argc;
-	//Return argv
+
 	return argv;
 }
 
-#endif // OPT_A2
+#endif // Optional for ASSGN2
 

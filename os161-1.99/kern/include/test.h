@@ -28,8 +28,11 @@
  * SUCH DAMAGE.
  */
 
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #ifndef _TEST_H_
 #define _TEST_H_
+
 #include "opt-A2.h"
 
 /*
@@ -83,13 +86,18 @@ int mallocstress(int, char **);
 int nettest(int, char **);
 
 #if OPT_A2
+
 int runprogram(int argc, char **argv, bool using_kernel_mem);
-userptr_t runprogram_argv_to_userspace(vaddr_t *stackptr_, int argc, char **argv);
 void runprogram_argv_destroy(int argc, char **argv);
+
+userptr_t runprogram_argv_to_userspace(vaddr_t *stackptr_, int argc, char **argv);
+
 #else
+
 /* Routine for running a user-level program. */
 int runprogram(char *progname);
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
 
 /* Kernel menu system. */
 void menu(char *argstr);

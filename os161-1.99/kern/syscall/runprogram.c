@@ -33,6 +33,8 @@
  * that execv() needs to do more than this function does.
  */
 
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #include <types.h>
 #include <kern/errno.h>
 #include <kern/fcntl.h>
@@ -45,6 +47,7 @@
 #include <syscall.h>
 #include <test.h>
 #include <copyinout.h>
+#include "opt-A2.h"
 
 #if OPT_A2
 

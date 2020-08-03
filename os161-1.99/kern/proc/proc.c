@@ -42,6 +42,8 @@
  * process that will have more than one thread is the kernel process.
  */
 
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #include <types.h>
 #include <proc.h>
 #include <current.h>
@@ -50,15 +52,21 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
+#include "opt-A2.h"
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
  */
-struct proc *kproc;
+
 #if OPT_A2
+
 struct lock *procdata_lock;
 struct cv *procdata_cv;
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
+
+
+struct proc *kproc;
 
 /*
  * Mechanism for making the kernel menu thread sleep while processes are running
@@ -75,36 +83,45 @@ struct semaphore *no_proc_sem;
 
 
 #if OPT_A2
+
 bool pid_use[PID_MAX + 1];
 
 pid_t procdata_find_free_pid(procdata_t *parent)
 {
-	//Try to assign a PID
 	int pid = -1;
 
-	for(int i = 0; i <= PID_MAX; i++) {
-		//PID is not used
-		if(!pid_use[i]) {
-			if(parent == NULL) {
-				pid = i;
+	for (int ii = 0; ii <= PID_MAX; ii++)
+	{
+		if (pid_use[ii] == 0) {
+			if (NULL == parent)
+			{
+				pid = ii;
 				break;
 			}
-			//Check if one of the children used this pid before
-			else {
-				DEBUG(DB_PROCSYS, "Free pid %d\n", i);
+			
+			else
+			{
+				DEBUG(DB_PROCSYS, "Free pid %d\n", ii);
 				bool reallyfree = true;
+
 				procdata_t *child = parent->p_firstchild;
-				while(child != NULL) {
+				
+				while (NULL != child)
+				{
 					DEBUG(DB_PROCSYS, "Checking child %d\n", child->p_pid);
-					if(child->p_pid == i) {
+
+					if (child->p_pid == ii)
+					{
 						reallyfree = false;
 						break;
 					}
+
 					child = child->p_nextsibling;
 				}
-				//Ok so we found a PID that we can use!
-				if(reallyfree) {
-					pid = i;
+
+				if (reallyfree == 1)
+				{
+					pid = ii;
 					break;
 				}
 			}
@@ -121,25 +138,29 @@ procdata_t *procdata_create(pid_t pid, procdata_t *parent)
 		return NULL;
 	}
 
+	procdata->p_firstchild = NULL;
+        procdata->p_nextsibling = NULL;
+        procdata->p_parent = parent;
 	procdata->p_pid = pid;
 	procdata->p_exited = false;
 	procdata->p_exit_code = 0;
-	procdata->p_firstchild = NULL;
-	procdata->p_nextsibling = NULL;
-	procdata->p_parent = parent;
 
-	//Add proc to parent tree
-	if(parent != NULL) {
-		//First node
-		if(parent->p_firstchild == NULL) {
+	if (NULL != parent)
+	{
+		if (NULL == parent->p_firstchild)
+		{
 			parent->p_firstchild = procdata;
 		}
-		//Sibling node
-		else {
+
+		else
+		{
 			procdata_t *sibling = parent->p_firstchild;
-			while(sibling->p_nextsibling != NULL) {
+			
+			while (NULL != sibling->p_nextsibling)
+			{
 				sibling = sibling->p_nextsibling;
 			}
+
 			sibling->p_nextsibling = procdata;
 		}
 	}
@@ -153,25 +174,34 @@ void procdata_destroy(procdata_t *procdata)
 
 	//Clean proc tree by unlinking parent
 	procdata_t *child = procdata->p_firstchild;
-	while(child != NULL) {
+	
+	while (NULL != child)
+	{
 		child->p_parent = NULL;
 		child = child->p_nextsibling;
 	}
 
 	procdata_t *parent = procdata->p_parent;
-	//Clean siblings
-	if(parent != NULL) {
-		//First node
+	
+	if (NULL != parent)
+	{
 		procdata_t *child = parent->p_firstchild;
-		if(child == procdata) {
+		
+		if (procdata == child)
+		{
 			parent->p_firstchild = NULL;
 		}
-		else if(child != NULL) {
-			while(child->p_nextsibling != NULL) {
-				if(child->p_nextsibling == procdata) {
+
+		else if (child != NULL)
+		{
+			while (NULL != child->p_nextsibling)
+			{
+				if (procdata == child->p_nextsibling)
+				{
 					child->p_nextsibling = procdata->p_nextsibling;
 					break;
 				}
+
 				child = child->p_nextsibling;
 			}
 		}
@@ -179,7 +209,7 @@ void procdata_destroy(procdata_t *procdata)
 
 	kfree(procdata);
 }
-#endif // OPT_A2
+#endif // Optional for ASSGN2
 
 /*
  * Create a proc structure.
@@ -212,9 +242,12 @@ proc_create(const char *name)
 #ifdef UW
 	proc->console = NULL;
 #endif // UW
+
 #if OPT_A2
+
 	proc->p_data = NULL;
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
 
 	return proc;
 }
@@ -310,19 +343,29 @@ proc_bootstrap(void)
 	if (kproc == NULL) {
 		panic("proc_create for kproc failed\n");
 	}
+
 #if OPT_A2
+
 	procdata_lock = lock_create("procdata_lock");
 	procdata_cv = cv_create("procdata_cv");
-	for(int i = 1; i <= PID_MAX; i++) {
-		pid_use[i] = false;
+	
+	for (int ii = 1; ii <= PID_MAX; ii++)
+	{
+		pid_use[ii] = false;
 	}
+	
 	pid_use[0] = true;
 	procdata_t *kprocdata = procdata_create(0, NULL);
-	if(kprocdata == NULL) {
+	
+	if (NULL == kprocdata)
+	{
 		panic("procdata_create for kproc failed\n");
 	}
+
 	kproc->p_data = kprocdata;
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
+
 #ifdef UW
 	proc_count = 0;
 	proc_count_mutex = sem_create("proc_count_mutex",1);
@@ -345,26 +388,36 @@ proc_bootstrap(void)
 struct proc *
 proc_create_runprogram(const char *name)
 {
+
 #if OPT_A2
+
 	lock_acquire(procdata_lock);
 	int pid = procdata_find_free_pid(NULL);
-	if(pid < 0) {
+	
+	if (pid < 0)
+	{
 		lock_release(procdata_lock);
 		return NULL;
 	}
+
 	pid_use[pid] = true;
 	lock_release(procdata_lock);
 
 	struct proc *proc = proc_create_runprogram2(name);
-	if(proc == NULL) {
+	
+	if (NULL == proc)
+	{
 		return NULL;
 	}
 
 	procdata_t *procdata = procdata_create(pid, NULL);
-	if(procdata == NULL) {
+	
+	if (NULL == procdata)
+	{
 		proc_destroy(proc);
 		return NULL;
 	}
+
 	proc->p_data = procdata;
 
 	DEBUG(DB_PROCSYS, "Runprogram created PID %d\n", pid);
@@ -375,7 +428,9 @@ proc_create_runprogram(const char *name)
 struct proc *
 proc_create_runprogram2(const char *name)
 {
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
+
 	struct proc *proc;
 	char *console_path;
 

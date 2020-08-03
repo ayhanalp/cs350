@@ -28,6 +28,8 @@
  * SUCH DAMAGE.
  */
 
+/* Ayhan Alp Aydeniz - aaaydeni */
+
 #ifndef _PROC_H_
 #define _PROC_H_
 
@@ -37,11 +39,11 @@
  * Note: curproc is defined by <current.h>.
  */
 
+#include "opt-A2.h"
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
 #include <limits.h>
 #include <synch.h>
-#include "opt-A2.h"
 
 struct addrspace;
 struct vnode;
@@ -54,23 +56,24 @@ struct semaphore;
  * Process id & exit code storage structure.
  */
 typedef struct procdata {
+	struct procdata *p_firstchild;
+        struct procdata *p_nextsibling;
+        struct procdata *p_parent;
+	
+	int p_exit_code;
 	pid_t p_pid;
 	bool p_exited;
-	int p_exit_code;
-	struct procdata *p_firstchild;
-	struct procdata *p_nextsibling;
-	struct procdata *p_parent;
 } procdata_t ;
 
 extern struct lock *procdata_lock;
 extern struct cv *procdata_cv;
 extern bool pid_use[PID_MAX + 1];
 
+void procdata_destroy(procdata_t *procdata);
 pid_t procdata_find_free_pid(procdata_t *parent);
 procdata_t *procdata_create(pid_t pid, procdata_t *parent);
-void procdata_destroy(procdata_t *procdata);
 
-#endif // OPT_A2
+#endif // Optional for ASSGN2
 
 /*
  * Process structure.
@@ -96,9 +99,13 @@ struct proc {
 #endif
 
 	/* add more material here as needed */
+
 #if OPT_A2
+
 	procdata_t *p_data;
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
+
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */
@@ -114,9 +121,12 @@ void proc_bootstrap(void);
 
 /* Create a fresh process for use by runprogram(). */
 struct proc *proc_create_runprogram(const char *name);
+
 #if OPT_A2
+
 struct proc *proc_create_runprogram2(const char *name);
-#endif // OPT_A2
+
+#endif // Optional for ASSGN2
 
 /* Destroy a process. */
 void proc_destroy(struct proc *proc);
